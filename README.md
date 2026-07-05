@@ -31,7 +31,7 @@ This is a monorepo — the mobile app, the marketing website, the backend worker
 
 ### `pnpm install`
 
-Downloads and sets up every third-party building block the project depends on (the map library, the database client, React Native, and ~1,000 others). Think of it as unpacking all the pre-made parts before you can assemble the furniture. You run it once after cloning the project, and again whenever those parts change. Nothing about the app runs yet — this just gets the workbench stocked.
+Downloads and sets up every third-party building block the project depends on (the map library, the database client, React Native, and ~1,000 others). You run it once after cloning the project, and again whenever those parts change. Nothing about the app runs yet — this just gets the workbench stocked.
 
 ### `pnpm dev`
 
