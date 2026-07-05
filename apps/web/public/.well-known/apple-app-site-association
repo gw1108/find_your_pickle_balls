@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.app.pickupsports.mobile"],
+        "components": [
+          { "/": "/e/*", "comment": "Event invite links open in-app" }
+        ]
+      }
+    ]
+  }
+}

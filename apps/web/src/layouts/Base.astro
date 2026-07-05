@@ -1,0 +1,42 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = "Free, map-first pickup sports. See who's playing right now and join a game in one tap." } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <!-- Smart App Banner — fill in the App Store id once the app exists (PLAN.md §7) -->
+    <!-- <meta name="apple-itunes-app" content="app-id=TODO" /> -->
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 2rem 1rem;
+        line-height: 1.6;
+      }
+      footer { margin-top: 4rem; font-size: 0.85rem; color: #666; }
+      footer a { margin-right: 1rem; }
+    </style>
+  </head>
+  <body>
+    <slot />
+    <footer>
+      <a href="/">Home</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/guidelines">Community Guidelines</a>
+      <a href="/delete-account">Delete Account</a>
+    </footer>
+  </body>
+</html>
