@@ -10,15 +10,22 @@ build/
 apps/mobile/android/
 apps/mobile/ios/
 apps/worker/.wrangler/
+*.tsbuildinfo
 
 # env & secrets
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
 supabase/.temp/
 supabase/.branches/
 
-# OS / editor
+# local editor / tooling
+.claude/settings.local.json
+
+# OS / editor / scratch
 .DS_Store
 Thumbs.db
 *.log
+*.tmp
