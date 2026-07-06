@@ -6,23 +6,9 @@ as you go.
 
 ## 1. Unblock the Android rig (~10 min + reboot)
 
-- [ ] **Enable WHPX** — open an *admin* PowerShell and run:
-
-  ```powershell
-  Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All
-  ```
-
-  Then **reboot**. (The emulator falls back to unusably slow software
-  emulation without this. Don't install AEHD or HAXM — both dead/dying.)
-
-- [ ] **Boot the emulator and sign into the Play Store** (new shell so PATH
-  picks up the SDK):
-
-  ```powershell
-  emulator -avd pickup
-  ```
-
-  Sign in with your **dedicated dev Google account** (not your personal one).
+> The **per-machine** rig setup (enable WHPX + reboot, boot the emulator, sign
+> into Play, sign the CLIs in) now lives in the README **Prereqs** section so it
+> gets redone on every dev box. Do that first, then the one-time task below.
 
 - [ ] **Install Nomad Table** from the Play Store on the AVD — the UX study
   from PLAN.md §9. If Play Integrity blocks it (unlikely), we fall back to a

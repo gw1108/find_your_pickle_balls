@@ -14,9 +14,44 @@ Map-first pickup-sports meetup app (pickleball first). See [PLAN.md](./PLAN.md) 
 
 ## Prereqs
 
+Everything in this section is **per dev machine** — do it once on each box,
+including a fresh one or future-you. One-time *project* setup (creating the
+Supabase / Stream / Expo / Stadia accounts, the GitHub remote) is a separate,
+owner-only punch-list in [YOUR-TODO.md](./YOUR-TODO.md).
+
+### Toolchain
+
 - Node ≥ 22, pnpm ≥ 11 (`npm i -g pnpm`)
 - Android Studio + a Google Play AVD for the dev loop (PLAN.md §9)
-- Supabase CLI for local DB work (`pnpm dlx supabase`)
+- Supabase CLI for local DB work (`pnpm dlx supabase` — no global install needed)
+
+### Windows: enable the emulator hypervisor (once, needs a reboot)
+
+The Android emulator falls back to unusably slow software emulation without WHPX.
+In an **admin** PowerShell:
+
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All
+```
+
+Then **reboot**. (Don't install AEHD or HAXM — both are dead/dying.)
+
+### Boot the emulator and sign into Play
+
+In a fresh shell (so PATH picks up the SDK):
+
+```powershell
+emulator -avd pickup
+```
+
+Sign into the Play Store with the dedicated dev Google account.
+
+### Sign the CLIs into the project accounts
+
+```powershell
+pnpm dlx supabase login
+pnpm dlx eas-cli login        # run from apps/mobile
+```
 
 ## Commands
 
