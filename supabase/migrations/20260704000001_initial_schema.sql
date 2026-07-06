@@ -1,7 +1,10 @@
 -- Initial schema (PLAN.md §4.4): profiles, venues, events, rsvps, checkins,
 -- reports, blocks. PostGIS geography + GiST for all geo queries.
 
-create extension if not exists postgis;
+-- Install into extensions schema, not public: keeps spatial_ref_sys out of
+-- the PostgREST-exposed schema (Supabase linter 0013). extensions is on the
+-- default search_path, so geography/st_* still resolve unqualified.
+create extension if not exists postgis with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- Enums

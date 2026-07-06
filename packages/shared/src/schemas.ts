@@ -61,7 +61,6 @@ export const eventSchema = z.object({
   player_cap: z.number().int().min(2).max(500).nullable(),
   /** Recurring template id, if spawned from one (§2). */
   recurrence_id: uuidSchema.nullable(),
-  stream_channel_id: z.string().nullable(),
   status: eventStatusSchema.default("active"),
   created_at: z.string(),
 });

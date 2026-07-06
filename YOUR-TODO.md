@@ -10,13 +10,13 @@ as you go.
 > into Play, sign the CLIs in) now lives in the README **Prereqs** section so it
 > gets redone on every dev box. Do that first, then the one-time task below.
 
-- [ ] **Install Nomad Table** from the Play Store on the AVD — the UX study
+- [X] **Install Nomad Table** from the Play Store on the AVD — the UX study
   from PLAN.md §9. If Play Integrity blocks it (unlikely), we fall back to a
   physical phone + USB.
 
 ## 2. Create the service accounts (~30 min)
 
-- [ ] **Supabase** — create a project at supabase.com (free tier), then in a
+- [X] **Supabase** — create a project at supabase.com (free tier), then in a
   repo terminal:
 
   ```powershell
@@ -29,12 +29,11 @@ as you go.
   Extensions (postgis is created by the migration, but verify), and copy the
   project URL + anon key into `apps/mobile/.env` (template: `.env.example`).
 
-- [ ] **Stream Chat** — register the **Maker plan account explicitly** at
-  getstream.io/maker-account. The default free "Build" tier is only 1,000 MAU;
-  Maker is 2,000 MAU / 100 peak concurrent (PLAN.md §5). Put the API key in
-  `apps/mobile/.env`.
+- [X] ~~**Stream Chat**~~ — **no longer needed.** Chat pivoted to Supabase
+  Realtime on 2026-07-06 (PLAN.md §5) after the Maker program rejected
+  free-email-domain signups. No chat vendor, no account, no API key.
 
-- [ ] **Expo / EAS** — create an account at expo.dev, then in `apps/mobile`:
+- [X] **Expo / EAS** — create an account at expo.dev, then in `apps/mobile`:
 
   ```powershell
   pnpm dlx eas-cli login
@@ -62,7 +61,8 @@ as you go.
   week-by-week gate table: LLC → D-U-N-S → Apple org $99/yr + Play org $25).
 - [ ] **Domain** — pickupsports.app is a placeholder in the code; buy the real
   domain (or tell Claude the actual name to search-replace) before the website
-  or deep links go live.
+  or deep links go live. (It briefly blocked the Stream signup; the Supabase
+  chat pivot removed that dependency, so it's back to "later".)
 - [ ] **Apple Developer account** — only needed at the first iOS milestone
   build (end of Phase 1), not now.
 

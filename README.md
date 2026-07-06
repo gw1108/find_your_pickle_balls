@@ -6,7 +6,7 @@ Map-first pickup-sports meetup app (pickleball first). See [PLAN.md](./PLAN.md) 
 
 | Path | What |
 |---|---|
-| `apps/mobile` | Expo (React Native, TypeScript) app — map, events, chat |
+| `apps/mobile` | Expo (React Native, TypeScript) app — map, events, chat (built on Supabase Realtime, PLAN.md §5) |
 | `apps/web` | Astro static site — marketing + compliance pages |
 | `apps/worker` | Hono Cloudflare Worker — `/e/:eventId` OG pages + `/admin` moderation queue |
 | `packages/shared` | Shared TypeScript types + zod schemas |
@@ -16,7 +16,7 @@ Map-first pickup-sports meetup app (pickleball first). See [PLAN.md](./PLAN.md) 
 
 Everything in this section is **per dev machine** — do it once on each box,
 including a fresh one or future-you. One-time *project* setup (creating the
-Supabase / Stream / Expo / Stadia accounts, the GitHub remote) is a separate,
+Supabase / Expo / Stadia accounts, the GitHub remote) is a separate,
 owner-only punch-list in [YOUR-TODO.md](./YOUR-TODO.md).
 
 ### Toolchain
@@ -38,11 +38,22 @@ Then **reboot**. (Don't install AEHD or HAXM — both are dead/dying.)
 
 ### Boot the emulator and sign into Play
 
-In a fresh shell (so PATH picks up the SDK):
+If `emulator` isn't found, add the SDK to your PATH (once), then open a **new** shell:
 
 ```powershell
-emulator -avd pickup
+[Environment]::SetEnvironmentVariable("ANDROID_HOME", "$env:LOCALAPPDATA\Android\Sdk", "User")
+$sdk = "$env:LOCALAPPDATA\Android\Sdk"
+[Environment]::SetEnvironmentVariable("Path", "$([Environment]::GetEnvironmentVariable('Path','User'));$sdk\emulator;$sdk\platform-tools", "User")
 ```
+
+In a fresh shell, list your AVDs, then boot one:
+
+```powershell
+emulator -list-avds        # e.g. Medium_Phone
+emulator -avd Medium_Phone # use whatever name -list-avds prints
+```
+
+Create the AVD first in Android Studio → Device Manager if the list is empty (Pixel-class device, x86_64 **Google Play** image — PLAN.md §9).
 
 Sign into the Play Store with the dedicated dev Google account.
 
@@ -82,4 +93,4 @@ Same idea as `pnpm dev`, but narrowed to **just the mobile app** instead of the 
 
 ## Environment
 
-Copy `.env.example` files in each app and fill in Supabase / Stream / Stadia keys.
+Copy `.env.example` files in each app and fill in Supabase / Stadia keys. (Chat runs on Supabase Realtime — no separate chat vendor or key, PLAN.md §5.)

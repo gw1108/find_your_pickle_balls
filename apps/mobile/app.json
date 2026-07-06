@@ -39,6 +39,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f347f190-b553-4e16-ad5a-65526d972f5c"
+      }
+    },
+    "owner": "gw1108s-team"
   }
 }

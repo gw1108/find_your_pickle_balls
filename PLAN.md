@@ -2,6 +2,8 @@
 
 *Prepared 2026-07-04. Modeled on [Nomad Table](https://nomadtable.app/); first iteration targets pickleball, basketball, running, and tennis meetups on a live map. All load-bearing facts below were researched against July-2026 primary sources and adversarially fact-checked (40 of 43 critical claims confirmed; the 3 corrections are incorporated).*
 
+*Revised 2026-07-06: chat pivoted from Stream Chat (Maker plan) to an MVP-scoped build on Supabase Realtime after Stream's Maker signup rejected free-email domains — see §5 for the new plan and the schedule cost.*
+
 ---
 
 ## 1. Key decisions at a glance
@@ -13,7 +15,7 @@
 | Backend | **Supabase** (Postgres + PostGIS + Auth + Realtime + Storage + Edge Functions) | $0 dev / ~$25–45/mo prod. PostGIS = exact "events near me" in one SQL call. Not Go/Rust at MVP (see §4.2). |
 | Go | Adopt **later, only if needed** (~50–100k MAU) for hot paths (chat gateway, feed fanout). Already installed on this machine. | Schema carries over; Supabase remains the system of record. |
 | Rust | **No** for this product's foreseeable lifecycle. | Velocity tax on a 1–2 person team; no CPU-bound workload in sight. |
-| Chat | **Stream Chat, free Maker plan** (≤2,000 chat MAU / 100 peak concurrent, hard caps, $0) | Building table-stakes chat on Supabase Realtime is an honest 10–14 dev-weeks. Verified: Maker plan exists, team qualifies. **Watch the 100-concurrent cap — it binds before MAU for synchronized play; lazy-connect + monitor from day one (§5).** |
+| Chat | **Build MVP-scoped chat on Supabase Realtime** (`channels`/`messages` tables + Broadcast, RLS-gated — §5). Pivoted 2026-07-06 from Stream's Maker plan, whose signup rejects free-email domains. | Zero new vendors, $0 — reuses the backend we already run, and Supabase Pro's 500-concurrent soft quota beats Maker's 100-concurrent hard cap. Cost is time, not money: est. 3–5 dev-weeks by cutting scope (no offline sync/read receipts at MVP), roadmap slips ~2 wks (§12). Buy option (Stream Start $399/mo) stays open if polish eats map runway. |
 | Maps | **MapLibre Native** (`maplibre-react-native`) + **Stadia Maps Starter ($20/mo) at launch**; migrate tiles to self-hosted Protomaps PMTiles on Cloudflare R2 (~$0–5/mo) when tile cost matters | $0 SDK, no MAU cliff. Stadia first = zero tile-pipeline work at MVP; swapping tile source later is a one-line style-URL change, whereas swapping map SDKs is a rewrite of the core screen. Fallback for max speed: `react-native-maps` + Google's now-unlimited-free mobile SDK. |
 | Instagram | **Optional, connect-later profile add-on — users can attach an IG handle to their profile any time after signup. NOT OAuth, never required at onboarding.** Consumer "Log in with Instagram" no longer exists (API killed Dec 4 2024). | See §3. No-OAuth is a hard external constraint; keeping the handle out of the signup path is our decision — it protects the sub-10-second join wedge, and research found a required field adds friction without verifiability. |
 | Auth | **Sign in with Apple + Google via Supabase Auth** (phone/OTP optional later) | What Nomad Table actually does. Apple Guideline 4.8 requires Sign in with Apple alongside any Google login. |
@@ -116,7 +118,8 @@ Nomad Table ("nomadtable: travel friends", solo founder Jay Raavi, launched Nov 
 Mobile app (Expo SDK 57 / RN 0.86 / TypeScript)
  ├─ Map: maplibre-react-native ← Stadia tiles at launch (→ self-hosted PMTiles on R2 later)
  ├─ Auth: Supabase Auth (Sign in with Apple + Google)
- ├─ Chat: Stream Chat RN SDK (Maker plan, $0) — event channels auto-created on join
+ ├─ Chat: Supabase Realtime chat (§5) — channels/messages tables, Broadcast delivery,
+ │        event channel auto-created on join
  ├─ Live UI: Supabase Realtime — new pins appear, attendee counts / "need N more" tick live,
  │           venue pins flip live-occupancy state as check-ins arrive/expire (§6.1)
  ├─ Push: Expo Push (free, wraps FCM+APNs) ← triggered by Supabase Edge Functions / DB webhooks
@@ -124,10 +127,12 @@ Mobile app (Expo SDK 57 / RN 0.86 / TypeScript)
 
 Supabase (source of truth — also the scheduler and queue)
  ├─ Postgres + PostGIS: users, profiles(ig_handle nullable — optional connect-later, §3), venues, events(geography Point, GiST), rsvps,
- │                      checkins(venue_id, user_id, sport, expires_at), reports, blocks
+ │                      checkins(venue_id, user_id, sport, expires_at), reports, blocks,
+ │                      channels, channel_members(last_read_at), messages (§5)
  ├─ RLS everywhere; block = mutual invisibility enforced in RLS (applies to check-in visibility too)
  ├─ RPC: events_near(lat, lng, radius, sport, skill) via ST_DWithin / KNN; venue_occupancy(venue_id)
- ├─ Realtime: postgres_changes on events/rsvps/checkins for the live-map features above (chat stays on Stream)
+ ├─ Realtime: postgres_changes on events/rsvps/checkins for the live-map features above;
+ │            Broadcast-from-Database (trigger → realtime.broadcast_changes) for chat delivery (§5)
  ├─ pg_cron + pgmq: event reminders, moderation-SLA timers, RSVP/push fanout queues, check-in TTL expiry — no external scheduler
  ├─ Storage: profile + event photos
  └─ Edge Functions: push dispatch, moderation queue, account deletion cascade
@@ -140,19 +145,31 @@ Website (static Astro site on Cloudflare Pages + one Hono Worker)
     + apple-itunes-app Smart App Banner; Play Install Referrer for Android deferred deep links
 ```
 
-Keep users/events in Supabase as the source of truth (Stream stores only messages/channel state) so a future chat migration stays feasible.
+Everything — including chat — now lives in Supabase. The channels/messages tables are keyed by our own event/user ids with no vendor concepts baked in, so if chat is ever bought later (§5 pressure valve), only those tables migrate out.
 
 ---
 
-## 5. Chat: buy, don't build (verified July 2026)
+## 5. Chat: build MVP-scoped on Supabase Realtime (pivoted 2026-07-06)
 
-- **Stream Maker plan** (re-verified against getstream.io/maker-account + /chat/pricing, July 2026): free; a modified Start plan hard-capped at **2,000 chat MAU / 100 peak concurrent connections**; eligibility = ≤5 people AND <$100k funding AND <$10k/mo revenue — we qualify. **Register the Maker account explicitly** — the default free "Build" tier is only 1,000 MAU. Includes the Start-plan feature set: group channels, DMs, typing, unread counts, read receipts, offline support, attachments, block/mute, advanced moderation + $100/mo AI moderation credit. RN SDK has official Expo components; New-Arch support since v6 (Expo ≥52 — SDK 57 fine; run a 1-day pin-and-verify spike).
-- **Documented cap behavior (Stream billing docs + Maker page):** "concurrent" = *peak simultaneous WebSocket connections* (opened by `connectUser()`), measured at the monthly peak. On paid plans, exceeding MAU/concurrent is explicitly *not blocked* — overage is billed instead (Start tier: $0.09/MAU, $0.99/concurrent). The Maker plan is the inverse: "Hard limits — no surprise bills" (Stream's wording) — at the cap, new connections are refused rather than billed.
-- **The binding constraint is concurrency, not MAU.** Pickup sports are synchronized: Saturday-morning open play across one metro puts many users in chat during the same hour, so peak concurrent scales with event density and will approach 100 long before MAU approaches 2,000. Mitigations (all documented Stream patterns): call `connectUser()` only when the user opens a chat surface, not on app launch (also Stream's own advice for keeping MAU honest); disconnect on background; rely on push — which needs no open WebSocket — for message notifications. Instrument peak-concurrent in the Stream dashboard from day one; when the monthly peak passes ~70, start planning the Start-plan upgrade before the cap starts refusing connections at the worst possible moment.
-- **Build-on-Supabase-Realtime** was honestly costed at **10–14 dev-weeks** for one developer to reach table-stakes UX (offline sync 2–3 wks, unread/badge logic 1 wk, push wiring 1.5–2 wks are the sinks). That's the entire runway for the actual differentiator (the map). Infra would be ~free; the time is not.
-- Alternatives are worse: Sendbird (no permanent free tier; $349/mo), TalkJS (RN requires the $569/mo plan), Ably/PubNub (primitives, not UI kits).
-- **The Nomad Table lesson**: they use Stream and *still* get chat complaints — the pain lives in integration polish. Spend the saved weeks on: fast chat cold-open, push that deep-links to the right thread, smooth scrolling.
-- Crossing either cap (expect peak-concurrent first) → Stream Start at $399/mo annual ($499 month-to-month): 10k MAU / 500 peak concurrent, with soft overages beyond ($0.09/MAU, $0.99/concurrent — verified July 2026). Treat that as a growth signal worth $399; only then revisit building.
+**What changed.** The original decision was "buy, don't build" via Stream's free Maker plan (2,000 MAU / 100 peak concurrent, hard caps). At signup time Stream's Maker program rejected our email — *free email domains are not accepted* — and the Maker page warns "availability is limited." Rather than buy the project domain early and re-apply for a hard-capped third-party dependency, chat moves onto the backend we already run: **an MVP-scoped chat built on Supabase Realtime.** New vendors: zero. New accounts: zero. Infra cost: $0 in dev; inside the already-budgeted Pro plan quota in production.
+
+**Scope honesty — this works only because we cut scope.** The original research costed *full table-stakes parity* (offline sync, read receipts, typing, attachments, polished badge logic) at an honest **10–14 dev-weeks**; that estimate still stands and we are **not** signing up for it. We ship a deliberately minimal chat and defer the rest:
+
+| In MVP (est. 3–5 dev-weeks total, absorbed into Phases 1–2) | Deferred until users ask |
+|---|---|
+| `channels` / `channel_members` / `messages` tables; event channel auto-created on first join | Offline outbox (MVP is online-only; history cached read-only) |
+| RLS: only attendees read/write an event channel; block = mutual invisibility (same RLS pattern as events) | Read receipts |
+| Delivery via **Broadcast-from-Database** (postgres trigger → `realtime.broadcast_changes` — Supabase's documented chat pattern) | Typing indicators (cheap later via Broadcast) |
+| Unread counts from `channel_members.last_read_at`; app-icon badge hygiene (a top Nomad-Table complaint) | Attachments beyond photos; reactions |
+| Photo messages via Supabase Storage (bucket + RLS already planned) | Message editing/deletion UX beyond a simple delete |
+| Push through the existing Expo Push + Edge Function pipeline, deep-linking into the thread | Multi-device read-state sync |
+| Keyset pagination on `created_at` + FlashList virtualization | |
+
+- **UI:** Supabase's official realtime-chat UI component is React/Next.js — web-only, so it's *reference code*, not a dependency (its channel/broadcast wiring is liftable for the §7 admin page if chat visibility is ever wanted there). The RN thread screen starts as `react-native-gifted-chat` (MIT) for speed; if its aging internals fight the New Architecture, swap to a custom FlashList thread — budget for that swap, don't pre-build it.
+- **Capacity (already verified in §4.3):** Supabase Pro ($25/mo, already budgeted) includes **500 concurrent Realtime connections and 5M messages/mo** — 5× the concurrent ceiling that was the binding constraint on Stream Maker, and it's a soft, upgradable quota rather than a hard cap that refuses connections at Saturday-morning peak. The same lazy-connect discipline still applies (subscribe when a chat surface opens, unsubscribe on background) because Realtime connections are shared with the live-map features (§6.1).
+- **Moderation is now fully in-house (§8):** message reports land in the same Supabase moderation queue; the event-title keyword filter runs on messages too; if that proves too weak, OpenAI's moderation endpoint is free. This replaces Stream's AI-moderation credit — the cost is review-queue volume, not dollars.
+- **Schedule impact (§12):** Phase 1 grows ~1 week (channel + message basics behind the one-tap join), Phase 2 grows ~1–2 weeks (DMs, unread/badges, push deep-links, moderation hooks). **Net: MVP slips ~2–3 weeks.** That is the one-time price of the pivot; it buys out the 2,000-MAU/100-concurrent cliff, the Maker-availability risk, the custom-domain-email prerequisite, and the future migration §4.4 was already hedging against.
+- **The buy option stays open.** The Nomad Table lesson — they use Stream and *still* get chat complaints — cuts both ways: the pain lives in integration polish either way. If chat polish starts eating the map runway (the actual differentiator), Stream Start at $399/mo (10k MAU / 500 concurrent, soft overages) is the pressure valve, and the SaaS field re-ranks then (Sendbird $349/mo, TalkJS $569/mo for RN, Ably/PubNub primitives-only — all worse as of July 2026). The schema keeps that door open: channels/messages are keyed by our own event/user ids, no vendor concepts baked in.
 
 ---
 
@@ -202,7 +219,7 @@ Deep links: self-host AASA + assetlinks.json (exactly like Nomad Table), Smart A
 **Moderation kit (Apple 1.2 + Google Play UGC — reviewers reject v1 social apps missing any):**
 - Report event/user/photo/message → Supabase moderation queue, 24h review SLA
 - Block user (mutual invisibility via RLS) — also required by both stores
-- Content filter on event titles/descriptions (keyword list + cheap image-moderation API; Stream's AI moderation covers chat)
+- Content filter on event titles/descriptions **and chat messages** (keyword list + cheap image-moderation API; chat moderation is in-house post-pivot — same keyword filter, message reports into the same queue, OpenAI's free moderation endpoint if the keyword list proves weak — §5)
 - EULA/community-guidelines acceptance at signup; support email visible in-app; admin queue page (route on the §7 Hono Worker, backed by the Supabase moderation tables)
 - Show moderation reasons + appeal path (Nomad Table's #1 trust complaint)
 
@@ -275,10 +292,12 @@ End-to-end from code-complete: **~3–5 weeks with org accounts** (vs. a hard 4�
 ## 12. Build roadmap
 
 - **Phase 0 — Rig & scaffolding (wk 1):** Android emulator rig (§9) + drive Nomad Table for UX study; monorepo (pnpm/Turborepo: `apps/mobile` Expo, `apps/web` Astro static + Hono Worker, `packages/shared` types+zod); Supabase project; EAS configured; CI.
-- **Phase 1 — Core loop (wk 2–5):** schema + RLS + `events_near` RPC; map screen (MapLibre) + list toggle + event cards; create-event (venue picker, sport, skill, player cap); one-tap join → Stream channel; profiles (IG handle = optional connect-later add-on, §3); venue layer import for launch metro. Dev loop runs on the Android rig (§9.1); first milestone EAS iOS build + TestFlight human check at the end of this phase.
-- **Phase 2 — Social & safety (wk 6–8):** DMs, push (Expo Push + Edge Functions, badge hygiene), block/report/moderation queue + admin page, account deletion (in-app + web), 18+ gate, age-signal APIs behind a flag; **live court occupancy (§6.1)**: `checkins` table + geofenced check-in prompt + live venue-pin state + privacy controls (opt-in, ghost mode, TTL expiry). Historical popularity bars and the paddle-stack queue are post-launch fast-follows.
-- **Phase 3 — Website & links (wk 8–9):** Astro marketing + compliance pages; Hono Worker for `/e/[eventId]` OG pages + `/admin`; AASA/assetlinks + Smart App Banner; waitlist page live from Phase 0 (needed early for GTM).
-- **Phase 4 — Polish & beta (wk 10–12):** the Nomad-Table-complaint list (perf, badges, navigation); TestFlight/closed-track beta with ambassadors; store submissions (§10 must have started ~L-9wk in parallel).
+- **Phase 1 — Core loop (wk 2–6):** schema + RLS + `events_near` RPC; map screen (MapLibre) + list toggle + event cards; create-event (venue picker, sport, skill, player cap); one-tap join → event group chat (channels/messages tables + Realtime Broadcast, §5 MVP scope); profiles (IG handle = optional connect-later add-on, §3); venue layer import for launch metro. Dev loop runs on the Android rig (§9.1); first milestone EAS iOS build + TestFlight human check at the end of this phase.
+- **Phase 2 — Social & safety (wk 7–10):** DMs (on the same chat tables), unread counts + badge hygiene, push (Expo Push + Edge Functions) deep-linking into threads, block/report/moderation queue + admin page (now covering chat messages, §5/§8), account deletion (in-app + web), 18+ gate, age-signal APIs behind a flag; **live court occupancy (§6.1)**: `checkins` table + geofenced check-in prompt + live venue-pin state + privacy controls (opt-in, ghost mode, TTL expiry). Historical popularity bars and the paddle-stack queue are post-launch fast-follows.
+- **Phase 3 — Website & links (wk 10–11):** Astro marketing + compliance pages; Hono Worker for `/e/[eventId]` OG pages + `/admin`; AASA/assetlinks + Smart App Banner; waitlist page live from Phase 0 (needed early for GTM).
+- **Phase 4 — Polish & beta (wk 12–14):** the Nomad-Table-complaint list (perf, badges, navigation); TestFlight/closed-track beta with ambassadors; store submissions (§10 must have started ~L-9wk in parallel).
+
+*(The roadmap runs ~2 weeks longer than the pre-pivot plan — the §5 chat build is absorbed into Phases 1–2.)*
 
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 

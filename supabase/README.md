@@ -1,6 +1,6 @@
 # Supabase
 
-Source of truth for users/events/venues (Stream stores only chat messages, PLAN.md §4.4).
+Source of truth for everything — users/events/venues *and* chat (channels/messages on Supabase Realtime, PLAN.md §5).
 
 ## Setup
 
