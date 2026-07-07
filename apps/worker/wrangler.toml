@@ -3,7 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2026-06-01"
 
 # Set with: wrangler secret put SUPABASE_URL / SUPABASE_ANON_KEY / ADMIN_TOKEN
-# ANON key only — the worker reads public event data through RLS, never the service role.
+#           wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+# The OG page uses the ANON key (RLS applies). The service-role key exists
+# solely for the token-gated /admin moderation queue (Phase 2, §8).
 
 [vars]
 SITE_ORIGIN = "https://pickupsports.app"

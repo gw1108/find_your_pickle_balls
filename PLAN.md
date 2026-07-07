@@ -293,8 +293,8 @@ End-to-end from code-complete: **~3–5 weeks with org accounts** (vs. a hard 4�
 
 - **Phase 0 — Rig & scaffolding (wk 1):** Android emulator rig (§9) + drive Nomad Table for UX study; monorepo (pnpm/Turborepo: `apps/mobile` Expo, `apps/web` Astro static + Hono Worker, `packages/shared` types+zod); Supabase project; EAS configured; CI.
 - **Phase 1 — Core loop (wk 2–6):** schema + RLS + `events_near` RPC; map screen (MapLibre) + list toggle + event cards; create-event (venue picker, sport, skill, player cap); one-tap join → event group chat (channels/messages tables + Realtime Broadcast, §5 MVP scope); profiles (IG handle = optional connect-later add-on, §3); venue layer import for launch metro. Dev loop runs on the Android rig (§9.1). **Done 2026-07-06** (status block below); the end-of-phase iOS milestone moved into Phase 2.
-- **Phase 2 — Social & safety (wk 7–10):** DMs (on the same chat tables), unread counts + badge hygiene, push (Expo Push + Edge Functions) deep-linking into threads, block/report/moderation queue + admin page (now covering chat messages, §5/§8), account deletion (in-app + web), 18+ gate, age-signal APIs behind a flag; **live court occupancy (§6.1)**: `checkins` table + geofenced check-in prompt + live venue-pin state + privacy controls (opt-in, ghost mode, TTL expiry). Historical popularity bars and the paddle-stack queue are post-launch fast-follows. **End of phase: first milestone EAS iOS build → TestFlight on a physical iPhone + the §9.1 human checklist** (moved from Phase 1; Apple Developer account in hand since 2026-07-06 — push and deep links land in this phase, so the checklist exercises them too).
-- **Phase 3 — Website & links (wk 10–11):** Astro marketing + compliance pages; Hono Worker for `/e/[eventId]` OG pages + `/admin`; AASA/assetlinks + Smart App Banner; waitlist page live from Phase 0 (needed early for GTM).
+- **Phase 2 — Social & safety (wk 7–10):** DMs (on the same chat tables), unread counts + badge hygiene, push (Expo Push + Edge Functions) deep-linking into threads, block/report/moderation queue + admin page (now covering chat messages, §5/§8), account deletion (in-app + web), 18+ gate, age-signal APIs behind a flag; **live court occupancy (§6.1)**: `checkins` table + geofenced check-in prompt + live venue-pin state + privacy controls (opt-in, ghost mode, TTL expiry). Historical popularity bars and the paddle-stack queue are post-launch fast-follows. **End of phase: first milestone EAS iOS build → TestFlight on a physical iPhone + the §9.1 human checklist** (moved from Phase 1; Apple Developer account in hand since 2026-07-06 — push and deep links land in this phase, so the checklist exercises them too). **Code-complete 2026-07-07** (status block below); live verification + the iOS milestone wait on YOUR-TODO 0a–0d.
+- **Phase 3 — Website & links (wk 10–11):** Astro marketing + compliance pages; Hono Worker for `/e/[eventId]` OG pages + `/admin`; AASA/assetlinks + Smart App Banner; waitlist page live from Phase 0 (needed early for GTM). **Plus the iOS TestFlight milestone inherited from Phase 2** (0d — runs whenever Apple activates the pending Developer Program enrollment; independent of the website work).
 - **Phase 4 — Polish & beta (wk 12–14):** the Nomad-Table-complaint list (perf, badges, navigation); TestFlight/closed-track beta with ambassadors; store submissions (§10 must have started ~L-9wk in parallel).
 
 *(The roadmap runs ~2 weeks longer than the pre-pivot plan — the §5 chat build is absorbed into Phases 1–2.)*
@@ -335,6 +335,74 @@ tables were missing.
    Phase 4's Nomad-complaint pass): chat list renders blank while the
    keyboard is open (inverted-FlatList inset quirk); broadcast-delivered
    messages show the "Player" placeholder name until a refetch.
+
+### Phase 2 status (2026-07-07) — built and verified end-to-end on the two-emulator rig
+
+Everything in the Phase 2 bullet is implemented; typecheck + lint clean across
+the monorepo. What shipped:
+
+- **DMs** on the same chat tables (`dm_key` pair channels, `get_or_create_dm`
+  RPC with block check, inbox/thread render partner names) — start a DM from
+  any attendee row (tap → Message/Report/Block sheet).
+- **Live court occupancy (§6.1)**: `check_in` RPC (server-enforced 150m
+  geofence, 2h TTL upsert), `venues_near` now returns ghost-mode-respecting
+  `live_count`, venue pins glow green with the count, venue sheet shows
+  aggregate occupancy + expected-from-RSVPs, geofenced one-tap check-in
+  prompt at ~75m, a checked-in banner, and live pin refresh via a
+  `realtime.send` trigger on the shared private `occupancy` topic.
+- **Unread + badge hygiene**: single `UnreadProvider` source of truth — Chats
+  tab badge and app-icon badge recomputed from the real total on every
+  refresh (never incremented blindly).
+- **Push**: `push_tokens` table, Expo Push registration (graceful no-op until
+  FCM credentials exist — YOUR-TODO 0b), `notify-message` Edge Function
+  (sender-verified fan-out, block-aware), notification taps deep-link into
+  the thread, Android `chat` notification channel.
+- **Safety (§8)**: message long-press → delete own / report / block sender;
+  soft deletes propagate live via UPDATE broadcasts; blocked-players list
+  with unblock in Profile; keyword-filter triggers on messages + events
+  auto-file system reports (nullable `reporter_id`); the admin moderation
+  queue is now a real page on the worker (cookie/token auth, service role,
+  hydrated report context, action/dismiss with resolution notes, optional
+  delete-message / cancel-event enforcement).
+- **Account deletion**: in-app danger-zone flow → `delete-account` Edge
+  Function (`auth.admin.deleteUser`, FK cascades) → sign-out. Web
+  `/delete-account` page existed since Phase 1.
+- **Age-signal APIs**: `AGE_SIGNAL_APIS_ENABLED` flag stubbed off (§8) — the
+  DB 18+ constraint remains the floor.
+
+**Verified live 2026-07-07** (migration + Edge Functions deployed by owner;
+two emulators, George + Player B, GPS-fixed to the Shoal Beach courts):
+geofenced check-in prompt → server geofence accepted → banner + green pin;
+**cross-device realtime occupancy** (B's check-in ticked George's untouched
+map 🟢1→🟢2); DM from attendee sheet with partner-named inbox/thread, live
+delivery both directions, tab + row unread badges; report message (24h-SLA
+confirmation); soft delete propagated live via UPDATE broadcast; block =
+event/DM vanish for the blocker, unblock restores; check-out reverts the pin.
+Verification found and fixed live: `venue_occupancy` counted distinct sports
+as `checkin_count`, and the blocked-players list couldn't name RLS-invisible
+profiles (new `my_blocked_players()` RPC) — both in migration
+`20260707000001` (**owner: one more `db push`, YOUR-TODO 0a½**). Also fixed:
+map location read upgraded Balanced→High accuracy (Balanced is too coarse for
+a 75m geofence and never engages GNSS). Polish notes for Phase 4: overlapping
+venue/event pins contest taps at low zoom; the geofence prompt re-offers the
+neighboring court right after a voluntary check-out; first-launch geofence
+prompt can be swallowed by the notification-permission dialog.
+**Remaining Phase 2 exit items:** FCM service-account upload (0b, in
+progress) for real pushes, then the **iOS TestFlight milestone** (0d).
+*Update 2026-07-07 (later):* 0a½ pushed and verified live. **0b is fully
+done and push is verified end-to-end on the rig**: FCM service-account key
+uploaded/assigned on EAS → message sent as Player B through the real
+`notify-message` fan-out → FCM delivered to the backgrounded app
+("Pickup · Sunset · Player: …") → tap deep-linked into the correct thread.
+Two findings for later: (1) `notify-message` sends to every stored token
+and dead ones accumulate — prune tokens on `DeviceNotRegistered` receipts
+(Phase 4 polish); (2) rig gotcha: an emulator booted `-no-snapshot-save`
+discards in-session app installs on exit. *Final update 2026-07-07:*
+the Apple Developer enrollment payment is still pending ("no team
+associated with your Apple account" at EAS build time), so the iOS
+TestFlight milestone (0d) moves into Phase 3 rather than holding this
+phase open. **Phase 2 is closed — Android-complete, all §12 Phase 2
+scope built and verified live.**
 
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 

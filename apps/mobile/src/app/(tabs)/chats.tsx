@@ -1,4 +1,3 @@
-import type { ChannelListItem } from '@pickup/shared';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
@@ -9,23 +8,20 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { fetchMyChannels } from '@/lib/queries';
+import { useUnread } from '@/lib/unread';
 
 export default function ChatsScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const [channels, setChannels] = useState<ChannelListItem[]>([]);
+  const { channels, refresh } = useUnread();
   const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      fetchMyChannels()
-        .then((c) => {
-          setChannels(c);
-          setError(null);
-        })
+      refresh()
+        .then(() => setError(null))
         .catch((e) => setError(errorMessage(e)));
-    }, [])
+    }, [refresh])
   );
 
   return (
@@ -52,7 +48,9 @@ export default function ChatsScreen() {
               <ThemedView type="backgroundElement" style={styles.row}>
                 <View style={styles.rowBody}>
                   <ThemedText type="smallBold" numberOfLines={1}>
-                    {item.event_title ?? 'Direct message'}
+                    {item.kind === 'dm'
+                      ? (item.dm_partner_name ?? 'Direct message')
+                      : (item.event_title ?? 'Group chat')}
                   </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
                     {item.last_message_preview ??

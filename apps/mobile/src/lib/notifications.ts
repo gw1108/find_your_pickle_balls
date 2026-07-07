@@ -1,0 +1,79 @@
+// Push + badge hygiene (PLAN.md §5): register the Expo push token, deep-link
+// notification taps into the thread, and keep the app-icon badge honest (a
+// top Nomad-Table complaint — the badge must always equal real unread count).
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+import * as Notifications from "expo-notifications";
+import { useEffect } from "react";
+import { Platform } from "react-native";
+
+import { savePushToken } from "@/lib/queries";
+import { supabase } from "@/lib/supabase";
+
+// foreground messages: banner only — unread state lives in the DB, not here
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
+/** Register for push and store the token. Safe to call on every sign-in;
+ * quietly no-ops where push can't work (emulator without FCM, denied
+ * permission) so the dev loop never breaks on it. */
+export async function registerForPush(userId: string): Promise<void> {
+  try {
+    if (!Device.isDevice && Platform.OS === "ios") return; // no push on iOS sim
+
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("chat", {
+        name: "Chat messages",
+        importance: Notifications.AndroidImportance.HIGH,
+      });
+    }
+
+    const { status: existing } = await Notifications.getPermissionsAsync();
+    let status = existing;
+    if (existing !== "granted") {
+      ({ status } = await Notifications.requestPermissionsAsync());
+    }
+    if (status !== "granted") return;
+
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    await savePushToken(userId, token, Platform.OS === "ios" ? "ios" : "android");
+  } catch {
+    // push is best-effort: Android dev builds need FCM credentials on EAS
+    // before getExpoPushTokenAsync succeeds (queued in YOUR-TODO.md)
+  }
+}
+
+/** Deep-link notification taps into the chat thread (§5). */
+export function useNotificationDeepLinks(
+  navigate: (channelId: string) => void
+): void {
+  useEffect(() => {
+    // cold start from a notification
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      const channelId = response?.notification.request.content.data?.channelId;
+      if (typeof channelId === "string") navigate(channelId);
+    });
+    // taps while running
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const channelId = response.notification.request.content.data?.channelId;
+      if (typeof channelId === "string") navigate(channelId);
+    });
+    return () => sub.remove();
+  }, [navigate]);
+}
+
+/** Fire the push fan-out for a just-sent message (see notify-message fn). */
+export function notifyMessageSent(messageId: string): void {
+  // fire-and-forget: a failed push must never block or slow the send path
+  supabase.functions
+    .invoke("notify-message", { body: { message_id: messageId } })
+    .catch(() => {});
+}

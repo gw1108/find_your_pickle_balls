@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "76146284966",
+    "project_id": "pickupsports-61c29",
+    "storage_bucket": "pickupsports-61c29.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:76146284966:android:3aff6affc430eed6ad5767",
+        "android_client_info": {
+          "package_name": "app.pickupsports.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCttQzLpLca-aFnJlsa-k43KTSOFkO6FIU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

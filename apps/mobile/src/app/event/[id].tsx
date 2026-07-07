@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { errorMessage ,
   formatEventTime,
@@ -10,6 +10,7 @@ import { errorMessage ,
 } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { UserActionsSheet, type UserActionsTarget } from '@/components/user-actions';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
@@ -31,6 +32,7 @@ export default function EventScreen() {
 
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [busy, setBusy] = useState(false);
+  const [userActions, setUserActions] = useState<UserActionsTarget | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -152,12 +154,22 @@ export default function EventScreen() {
             {needMore !== null ? (needMore > 0 ? ` · need ${needMore} more` : ' · full') : ''}
           </ThemedText>
           {going.map((r) => (
-            <View key={r.user_id} style={styles.attendee}>
+            <Pressable
+              key={r.user_id}
+              accessibilityRole="button"
+              disabled={r.user_id === userId}
+              onPress={() =>
+                setUserActions({
+                  id: r.user_id,
+                  name: r.profile?.display_name ?? 'Player',
+                })
+              }
+              style={styles.attendee}>
               <ThemedText type="small">
                 {r.profile?.display_name ?? 'Player'}
                 {r.user_id === event.host_id ? '  (host)' : ''}
               </ThemedText>
-            </View>
+            </Pressable>
           ))}
         </ThemedView>
 
@@ -199,6 +211,16 @@ export default function EventScreen() {
           </ThemedText>
         </Pressable>
       </ScrollView>
+
+      <UserActionsSheet
+        target={userActions}
+        onClose={() => setUserActions(null)}
+        onBlocked={() => {
+          setUserActions(null);
+          // blocked host → event disappears; blocked attendee → refreshed list
+          router.back();
+        }}
+      />
     </ThemedView>
   );
 }

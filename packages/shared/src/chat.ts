@@ -33,11 +33,29 @@ export const channelListItemSchema = z.object({
   event_id: uuidSchema.nullable(),
   event_title: z.string().nullable(),
   event_starts_at: z.string().nullable(),
+  dm_partner_id: uuidSchema.nullable(),
+  dm_partner_name: z.string().nullable(),
+  dm_partner_avatar: z.string().nullable(),
   last_message_at: z.string().nullable(),
   last_message_preview: z.string().nullable(),
   unread_count: z.number().int().nonnegative(),
 });
 export type ChannelListItem = z.infer<typeof channelListItemSchema>;
 
+/** Row shape returned by the channel_info() RPC — thread screen header. */
+export const channelInfoSchema = z.object({
+  channel_id: uuidSchema,
+  kind: channelKindSchema,
+  event_id: uuidSchema.nullable(),
+  event_title: z.string().nullable(),
+  dm_partner_id: uuidSchema.nullable(),
+  dm_partner_name: z.string().nullable(),
+});
+export type ChannelInfo = z.infer<typeof channelInfoSchema>;
+
 /** Realtime topic for a channel's Broadcast-from-Database stream. */
 export const chatTopic = (channelId: string) => `chat:${channelId}`;
+
+/** Shared private topic for live court occupancy pings (§6.1) — payload is
+ * `{ venue_id }` only; clients refetch aggregates. */
+export const OCCUPANCY_TOPIC = "occupancy";

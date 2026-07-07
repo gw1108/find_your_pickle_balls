@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { chatTopic } from '@pickup/shared';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { chatTopic, type ChannelInfo } from '@pickup/shared';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -21,53 +21,70 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
+import { notifyMessageSent } from '@/lib/notifications';
 import {
+  blockUser,
+  deleteMessage,
+  fetchChannelInfo,
   fetchMessages,
   markChannelRead,
+  reportTarget,
   sendMessage,
   type MessageWithSender,
 } from '@/lib/queries';
 import { supabase } from '@/lib/supabase';
+import { useUnread } from '@/lib/unread';
 
 const PAGE_SIZE = 50;
 
 export default function ChatScreen() {
   const { id: channelId } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { session, profile } = useAuth();
+  const { refresh: refreshUnread } = useUnread();
   const userId = session!.user.id;
 
   // newest-first to match the inverted FlatList
   const [messages, setMessages] = useState<MessageWithSender[]>([]);
+  const [info, setInfo] = useState<ChannelInfo | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const endReached = useRef(false);
 
+  // Upsert: broadcast rows replace optimistic/stale copies by id. Broadcast
+  // payloads carry no profile join — keep a previously-known sender.
   const mergeMessages = useCallback((incoming: MessageWithSender[]) => {
     setMessages((cur) => {
-      const seen = new Set(cur.map((m) => m.id));
-      const fresh = incoming.filter((m) => !seen.has(m.id));
-      if (fresh.length === 0) return cur;
-      return [...fresh, ...cur].sort(
+      const known = new Map(cur.map((m) => [m.id, m]));
+      for (const m of incoming) {
+        known.set(m.id, { ...m, sender: m.sender ?? known.get(m.id)?.sender ?? null });
+      }
+      return [...known.values()].sort(
         (a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)
       );
     });
   }, []);
 
-  // initial page + read stamp
+  // initial page + header info + read stamp
   useEffect(() => {
     (async () => {
       try {
-        const page = await fetchMessages(channelId, undefined, PAGE_SIZE);
+        const [page, channelInfo] = await Promise.all([
+          fetchMessages(channelId, undefined, PAGE_SIZE),
+          fetchChannelInfo(channelId),
+        ]);
         endReached.current = page.length < PAGE_SIZE;
         setMessages(page);
+        setInfo(channelInfo);
         await markChannelRead(channelId);
+        refreshUnread().catch(() => {});
       } catch (e) {
         Alert.alert('Could not load chat', errorMessage(e));
       }
     })();
-  }, [channelId]);
+  }, [channelId, refreshUnread]);
 
   // live delivery: Broadcast-from-Database on the private chat topic (§5).
   // Lazy-connect discipline: subscribe on mount, remove on unmount.
@@ -81,15 +98,25 @@ export default function ChatScreen() {
         const record = (payload.payload as { record?: MessageWithSender } | undefined)
           ?.record;
         if (!record || record.channel_id !== channelId) return;
-        // broadcast rows carry no join — show immediately, name arrives on refetch
+        // broadcast rows carry no join — show immediately, then refetch the
+        // head of the thread so sender names fill in
         mergeMessages([{ ...record, sender: record.sender ?? null }]);
+        fetchMessages(channelId, undefined, 5).then(mergeMessages).catch(() => {});
         await markChannelRead(channelId);
+        refreshUnread().catch(() => {});
+      })
+      // soft deletes arrive as UPDATE broadcasts
+      .on('broadcast', { event: 'UPDATE' }, (payload) => {
+        const record = (payload.payload as { record?: MessageWithSender } | undefined)
+          ?.record;
+        if (!record || record.channel_id !== channelId) return;
+        mergeMessages([{ ...record, sender: record.sender ?? null }]);
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [channelId, mergeMessages]);
+  }, [channelId, mergeMessages, refreshUnread]);
 
   const loadOlder = async () => {
     if (endReached.current || messages.length === 0) return;
@@ -120,7 +147,8 @@ export default function ChatScreen() {
     };
     setMessages((cur) => [optimistic, ...cur]);
     try {
-      await sendMessage(channelId, userId, content);
+      const messageId = await sendMessage(channelId, userId, content);
+      notifyMessageSent(messageId); // push fan-out (§5) — fire-and-forget
       setMessages((cur) => cur.filter((m) => m.id !== optimisticId));
       // pick up our own row (broadcast may or may not echo before this)
       mergeMessages(await fetchMessages(channelId, undefined, 5));
@@ -131,6 +159,58 @@ export default function ChatScreen() {
     } finally {
       setSending(false);
     }
+  };
+
+  // long-press safety actions (§8): delete own, report/block others
+  const messageActions = (item: MessageWithSender) => {
+    if (item.id.startsWith('optimistic-') || item.deleted_at) return;
+    const mine = item.sender_id === userId;
+    const senderName = item.sender?.display_name ?? 'this player';
+    if (mine) {
+      Alert.alert('Delete message?', 'It will show as deleted for everyone.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMessage(item.id);
+              mergeMessages([{ ...item, deleted_at: new Date().toISOString() }]);
+            } catch (e) {
+              Alert.alert('Could not delete', errorMessage(e));
+            }
+          },
+        },
+      ]);
+      return;
+    }
+    Alert.alert('Message options', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Report message',
+        onPress: async () => {
+          try {
+            await reportTarget(userId, 'message', item.id, 'Reported from chat');
+            Alert.alert('Reported', 'Our team reviews reports within 24 hours.');
+          } catch (e) {
+            Alert.alert('Could not report', errorMessage(e));
+          }
+        },
+      },
+      {
+        text: `Block ${senderName}`,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await blockUser(userId, item.sender_id);
+            Alert.alert('Blocked', 'You will no longer see each other in the app.');
+            router.back();
+          } catch (e) {
+            Alert.alert('Could not block', errorMessage(e));
+          }
+        },
+      },
+    ]);
   };
 
   const renderItem = ({ item }: { item: MessageWithSender }) => {
@@ -144,7 +224,8 @@ export default function ChatScreen() {
     }
     return (
       <View style={[styles.bubbleRow, mine && styles.bubbleRowMine]}>
-        <View
+        <Pressable
+          onLongPress={() => messageActions(item)}
           style={[
             styles.bubble,
             { backgroundColor: mine ? theme.text : theme.backgroundElement },
@@ -162,14 +243,21 @@ export default function ChatScreen() {
             style={{ color: mine ? theme.backgroundSelected : theme.textSecondary }}>
             {formatMessageTime(item.created_at)}
           </ThemedText>
-        </View>
+        </Pressable>
       </View>
     );
   };
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ title: 'Chat' }} />
+      <Stack.Screen
+        options={{
+          title:
+            info?.kind === 'dm'
+              ? (info.dm_partner_name ?? 'Direct message')
+              : (info?.event_title ?? 'Chat'),
+        }}
+      />
       <FlatList
         inverted
         data={messages}

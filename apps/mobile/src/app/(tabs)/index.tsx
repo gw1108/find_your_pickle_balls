@@ -1,21 +1,33 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Camera, Map, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
 import type { LatLng, SkillLevel, Sport } from '@pickup/shared';
-import { SPORTS } from '@pickup/shared';
+import { OCCUPANCY_TOPIC, SPORTS } from '@pickup/shared';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Chip, SkillChips } from '@/components/chips';
 import { EventCard } from '@/components/event-card';
+import { VenueSheet } from '@/components/venue-sheet';
 import { errorMessage , SPORT_EMOJI, SPORT_LABEL } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { fetchEventsNear, type NearbyEvent } from '@/lib/queries';
+import { useAuth } from '@/lib/auth';
+import { CHECKIN_PROMPT_RADIUS_M, distanceMeters } from '@/lib/geo';
+import {
+  checkIn,
+  fetchEventsNear,
+  fetchMyCheckin,
+  fetchVenuesNear,
+  type MyCheckin,
+  type NearbyEvent,
+  type NearbyVenue,
+} from '@/lib/queries';
+import { supabase } from '@/lib/supabase';
 
 const MAP_STYLE_URL =
   process.env.EXPO_PUBLIC_MAP_STYLE_URL || 'https://demotiles.maplibre.org/style.json';
@@ -28,13 +40,21 @@ export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraRef>(null);
+  const { session, profile } = useAuth();
+  const userId = session!.user.id;
 
   const [center, setCenter] = useState<LatLng>(AUSTIN);
+  const [myLocation, setMyLocation] = useState<LatLng | null>(null);
   const [events, setEvents] = useState<NearbyEvent[]>([]);
+  const [venues, setVenues] = useState<NearbyVenue[]>([]);
+  const [myCheckin, setMyCheckin] = useState<MyCheckin | null>(null);
+  const [selectedVenue, setSelectedVenue] = useState<NearbyVenue | null>(null);
   const [showList, setShowList] = useState(false);
   const [sport, setSport] = useState<Sport | null>(null);
   const [skill, setSkill] = useState<SkillLevel | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // venues we already offered a check-in for this session (§6.1 prompt)
+  const promptedVenues = useRef<Set<string>>(new Set());
 
   // one-shot: center on the user if they allow it
   useEffect(() => {
@@ -42,10 +62,13 @@ export default function MapScreen() {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
+        // High engages real GNSS — Balanced (~100m) is too coarse to gate a
+        // 75m check-in geofence (§6.1) and never wakes GPS on the emulator
         const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
+          accuracy: Location.Accuracy.High,
         });
         const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setMyLocation(here);
         setCenter(here);
         cameraRef.current?.easeTo({ center: [here.lng, here.lat], zoom: 12, duration: 600 });
       } catch {
@@ -58,16 +81,21 @@ export default function MapScreen() {
   const load = useCallback(async () => {
     try {
       setError(null);
-      setEvents(
-        await fetchEventsNear(center, {
+      const [nextEvents, nextVenues, nextCheckin] = await Promise.all([
+        fetchEventsNear(center, {
           sport: sport ?? undefined,
           skill: skill ?? undefined,
-        })
-      );
+        }),
+        fetchVenuesNear(center, { sport: sport ?? undefined }),
+        fetchMyCheckin(userId),
+      ]);
+      setEvents(nextEvents);
+      setVenues(nextVenues);
+      setMyCheckin(nextCheckin);
     } catch (e) {
       setError(errorMessage(e));
     }
-  }, [center, sport, skill]);
+  }, [center, sport, skill, userId]);
 
   // refetch on focus so joins/creations elsewhere show up immediately
   useFocusEffect(
@@ -75,6 +103,61 @@ export default function MapScreen() {
       load();
     }, [load])
   );
+
+  // live pin state (§6.1): any check-in change anywhere pings the shared
+  // occupancy topic → refetch venue aggregates (coalesced to 1/sec)
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    supabase.realtime.setAuth();
+    const channel = supabase
+      .channel(OCCUPANCY_TOPIC, { config: { private: true } })
+      .on('broadcast', { event: 'occupancy' }, () => {
+        if (refetchTimer.current) return;
+        refetchTimer.current = setTimeout(() => {
+          refetchTimer.current = null;
+          load();
+        }, 1000);
+      })
+      .subscribe();
+    return () => {
+      if (refetchTimer.current) clearTimeout(refetchTimer.current);
+      refetchTimer.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [load]);
+
+  // geofenced check-in prompt (§6.1): opt-in, one tap, fires from a foreground
+  // location read — never from background tracking
+  useEffect(() => {
+    if (!myLocation || myCheckin || venues.length === 0) return;
+    const nearest = venues.find(
+      (v) =>
+        distanceMeters(myLocation, { lat: v.lat, lng: v.lng }) <= CHECKIN_PROMPT_RADIUS_M &&
+        !promptedVenues.current.has(v.id)
+    );
+    if (!nearest) return;
+    promptedVenues.current.add(nearest.id);
+    const sportHere =
+      (profile?.sports ?? []).find((s) => nearest.sports.includes(s)) ?? nearest.sports[0];
+    Alert.alert(
+      `At ${nearest.name}?`,
+      `Check in so nearby players can see ${SPORT_LABEL[sportHere].toLowerCase()} is on. Auto-expires in 2 hours.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Check in',
+          onPress: async () => {
+            try {
+              await checkIn(nearest.id, sportHere, myLocation);
+              load();
+            } catch (e) {
+              Alert.alert('Could not check in', errorMessage(e));
+            }
+          },
+        },
+      ]
+    );
+  }, [myLocation, myCheckin, venues, profile, load]);
 
   return (
     <ThemedView style={styles.container}>
@@ -108,6 +191,31 @@ export default function MapScreen() {
             ref={cameraRef}
             initialViewState={{ center: [center.lng, center.lat], zoom: 11 }}
           />
+          {/* venue layer under event pins; live venues glow green (§6.1) */}
+          {venues.map((v) => (
+            <Marker
+              key={v.id}
+              id={v.id}
+              lngLat={[v.lng, v.lat]}
+              onPress={() => setSelectedVenue(v)}>
+              {v.live_count > 0 ? (
+                <View style={[styles.venuePinLive, { backgroundColor: theme.background }]}>
+                  <ThemedText type="small">🟢</ThemedText>
+                  <ThemedText type="smallBold">{v.live_count}</ThemedText>
+                </View>
+              ) : (
+                <View
+                  style={[
+                    styles.venuePin,
+                    {
+                      backgroundColor: theme.backgroundElement,
+                      borderColor: theme.textSecondary,
+                    },
+                  ]}
+                />
+              )}
+            </Marker>
+          ))}
           {events.map((ev) => (
             <Marker
               key={ev.id}
@@ -154,6 +262,25 @@ export default function MapScreen() {
         </ThemedView>
       )}
 
+      {/* live check-in banner — tap to reopen the venue sheet / check out */}
+      {myCheckin && !showList && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            const venue = venues.find((v) => v.id === myCheckin.venue_id);
+            if (venue) setSelectedVenue(venue);
+          }}
+          style={[styles.checkinBanner, { backgroundColor: theme.backgroundElement }]}>
+          <ThemedText type="small">
+            🟢 Checked in
+            {(() => {
+              const v = venues.find((x) => x.id === myCheckin.venue_id);
+              return v ? ` at ${v.name}` : '';
+            })()}
+          </ThemedText>
+        </Pressable>
+      )}
+
       {/* map/list toggle */}
       <Pressable
         accessibilityRole="button"
@@ -176,6 +303,14 @@ export default function MapScreen() {
         style={[styles.fab, { backgroundColor: theme.text }]}>
         <Ionicons name="add" size={28} color={theme.background} />
       </Pressable>
+
+      <VenueSheet
+        venue={selectedVenue}
+        myCheckin={myCheckin}
+        myLocation={myLocation}
+        onClose={() => setSelectedVenue(null)}
+        onChanged={load}
+      />
     </ThemedView>
   );
 }
@@ -195,6 +330,30 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   pinEmoji: { fontSize: 18 },
+  venuePin: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1.5,
+  },
+  venuePinLive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.half,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: 999,
+    elevation: 3,
+  },
+  checkinBanner: {
+    position: 'absolute',
+    left: Spacing.three,
+    bottom: 96,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: 999,
+    elevation: 3,
+  },
   filters: { position: 'absolute', left: 0, right: 0, gap: Spacing.two },
   filterRow: { paddingHorizontal: Spacing.three, gap: Spacing.two, flexDirection: 'row' },
   errorBox: {

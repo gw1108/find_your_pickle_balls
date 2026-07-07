@@ -1,4 +1,5 @@
 import type {
+  ChannelInfo,
   ChannelListItem,
   LatLng,
   Message,
@@ -37,6 +38,8 @@ export type NearbyVenue = {
   court_count: number | null;
   verified: boolean;
   distance_m: number;
+  /** Live check-in count (§6.1) — ghost-mode users excluded server-side. */
+  live_count: number;
 };
 
 export async function fetchEventsNear(
@@ -213,13 +216,189 @@ export async function sendMessage(
   channelId: string,
   senderId: string,
   content: string
-): Promise<void> {
-  const { error } = await supabase
+): Promise<string> {
+  const { data, error } = await supabase
     .from("messages")
-    .insert({ channel_id: channelId, sender_id: senderId, content });
+    .insert({ channel_id: channelId, sender_id: senderId, content })
+    .select("id")
+    .single();
   if (error) throw error;
+  return data.id as string;
 }
 
 export async function markChannelRead(channelId: string): Promise<void> {
   await supabase.rpc("mark_channel_read", { p_channel_id: channelId });
+}
+
+/** Soft delete (§5 MVP scope — no editing). */
+export async function deleteMessage(messageId: string): Promise<void> {
+  const { error } = await supabase
+    .from("messages")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", messageId);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// DMs (Phase 2 — same chat tables, §5)
+// ---------------------------------------------------------------------------
+
+export async function getOrCreateDm(otherUserId: string): Promise<string> {
+  const { data, error } = await supabase.rpc("get_or_create_dm", {
+    p_other_user: otherUserId,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function fetchChannelInfo(channelId: string): Promise<ChannelInfo | null> {
+  const { data, error } = await supabase.rpc("channel_info", {
+    p_channel_id: channelId,
+  });
+  if (error) throw error;
+  const rows = (data ?? []) as ChannelInfo[];
+  return rows[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Live court occupancy (§6.1)
+// ---------------------------------------------------------------------------
+
+export type MyCheckin = {
+  id: string;
+  venue_id: string;
+  sport: Sport;
+  expires_at: string;
+};
+
+export async function fetchMyCheckin(userId: string): Promise<MyCheckin | null> {
+  const { data, error } = await supabase
+    .from("checkins")
+    .select("id, venue_id, sport, expires_at")
+    .eq("user_id", userId)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+  if (error) throw error;
+  return (data as MyCheckin) ?? null;
+}
+
+/** Server re-validates the geofence (~150m); returns the new expires_at. */
+export async function checkIn(
+  venueId: string,
+  sport: Sport,
+  at: LatLng
+): Promise<string> {
+  const { data, error } = await supabase.rpc("check_in", {
+    p_venue_id: venueId,
+    p_sport: sport,
+    p_lat: at.lat,
+    p_lng: at.lng,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function checkOut(userId: string): Promise<void> {
+  const { error } = await supabase.from("checkins").delete().eq("user_id", userId);
+  if (error) throw error;
+}
+
+export type VenueOccupancy = {
+  venue_id: string;
+  checkin_count: number;
+  by_sport: Partial<Record<Sport, number>>;
+  expected_from_rsvps: number;
+};
+
+export async function fetchVenueOccupancy(venueId: string): Promise<VenueOccupancy | null> {
+  const { data, error } = await supabase.rpc("venue_occupancy", {
+    p_venue_id: venueId,
+  });
+  if (error) throw error;
+  const rows = (data ?? []) as VenueOccupancy[];
+  return rows[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Safety: blocks & reports (§8)
+// ---------------------------------------------------------------------------
+
+export async function blockUser(blockerId: string, blockedId: string): Promise<void> {
+  const { error } = await supabase
+    .from("blocks")
+    .upsert(
+      { blocker_id: blockerId, blocked_id: blockedId },
+      { onConflict: "blocker_id,blocked_id" }
+    );
+  if (error) throw error;
+}
+
+export async function unblockUser(blockerId: string, blockedId: string): Promise<void> {
+  const { error } = await supabase
+    .from("blocks")
+    .delete()
+    .eq("blocker_id", blockerId)
+    .eq("blocked_id", blockedId);
+  if (error) throw error;
+}
+
+export type BlockedUser = {
+  blocked_id: string;
+  display_name: string;
+  created_at: string;
+};
+
+/** RPC (SECURITY DEFINER): blocked users' profiles are invisible under RLS,
+ * so a client-side join can't resolve their names. */
+export async function fetchBlockedUsers(): Promise<BlockedUser[]> {
+  const { data, error } = await supabase.rpc("my_blocked_players");
+  if (error) throw error;
+  return (data ?? []) as BlockedUser[];
+}
+
+export type ReportKind = "user" | "event" | "photo" | "message";
+
+export async function reportTarget(
+  reporterId: string,
+  kind: ReportKind,
+  targetId: string,
+  reason: string
+): Promise<void> {
+  const { error } = await supabase.from("reports").insert({
+    reporter_id: reporterId,
+    target_kind: kind,
+    target_id: targetId,
+    reason,
+  });
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Push tokens (§5 — Expo Push)
+// ---------------------------------------------------------------------------
+
+export async function savePushToken(
+  userId: string,
+  token: string,
+  platform: "ios" | "android"
+): Promise<void> {
+  const { error } = await supabase.from("push_tokens").upsert(
+    { token, user_id: userId, platform, updated_at: new Date().toISOString() },
+    { onConflict: "token" }
+  );
+  if (error) throw error;
+}
+
+export async function removePushToken(token: string): Promise<void> {
+  const { error } = await supabase.from("push_tokens").delete().eq("token", token);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Account deletion (Apple 5.1.1(v), §8) — Edge Function with service role
+// ---------------------------------------------------------------------------
+
+export async function deleteAccount(): Promise<void> {
+  const { error } = await supabase.functions.invoke("delete-account");
+  if (error) throw error;
 }

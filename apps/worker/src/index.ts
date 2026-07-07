@@ -1,8 +1,11 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { getCookie, setCookie } from "hono/cookie";
 
 type Env = {
   SUPABASE_URL: string;
   SUPABASE_ANON_KEY: string;
+  /** wrangler secret — required for /admin (bypasses RLS to read the queue) */
+  SUPABASE_SERVICE_ROLE_KEY: string;
   ADMIN_TOKEN: string;
   SITE_ORIGIN: string;
 };
@@ -14,6 +17,17 @@ type PublicEvent = {
   starts_at: string;
   player_cap: number | null;
   going_count: number;
+};
+
+type Report = {
+  id: string;
+  reporter_id: string | null;
+  target_kind: "user" | "event" | "photo" | "message";
+  target_id: string;
+  reason: string;
+  status: "open" | "actioned" | "dismissed";
+  resolution_note: string | null;
+  created_at: string;
 };
 
 const app = new Hono<{ Bindings: Env }>();
@@ -70,14 +84,178 @@ app.get("/e/:eventId", async (c) => {
 </html>`);
 });
 
-/** Admin moderation queue (PLAN.md §8) — token-gated placeholder until the
- * real queue UI lands in Phase 2. */
-app.get("/admin", (c) => {
-  const auth = c.req.header("Authorization");
-  if (auth !== `Bearer ${c.env.ADMIN_TOKEN}`) {
-    return c.text("Unauthorized", 401);
+// ---------------------------------------------------------------------------
+// Admin moderation queue (PLAN.md §8 — 24h review SLA).
+// Cookie-gated by ADMIN_TOKEN; queries run with the service role (RLS bypass).
+// ---------------------------------------------------------------------------
+
+/** Service-role PostgREST fetch. */
+async function db<T>(env: Env, path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+  return (await res.json()) as T;
+}
+
+function isAdmin(c: Context<{ Bindings: Env }>, env: Env): boolean {
+  return (
+    getCookie(c, "admin_token") === env.ADMIN_TOKEN ||
+    c.req.header("Authorization") === `Bearer ${env.ADMIN_TOKEN}`
+  );
+}
+
+const loginPage = `<!doctype html><html><head><meta charset="utf-8"><title>Admin</title></head>
+<body style="font-family:system-ui;max-width:640px;margin:40px auto;padding:0 16px">
+<h1>Moderation queue</h1>
+<form method="post" action="/admin/login">
+  <input type="password" name="token" placeholder="Admin token" autofocus>
+  <button type="submit">Sign in</button>
+</form></body></html>`;
+
+app.post("/admin/login", async (c) => {
+  const form = await c.req.formData();
+  if (form.get("token") !== c.env.ADMIN_TOKEN) return c.text("Wrong token", 401);
+  setCookie(c, "admin_token", c.env.ADMIN_TOKEN, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    path: "/admin",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+  return c.redirect("/admin");
+});
+
+app.get("/admin", async (c) => {
+  if (!isAdmin(c, c.env)) return c.html(loginPage, 401);
+
+  const reports = await db<Report[]>(
+    c.env,
+    "reports?status=eq.open&order=created_at.asc&limit=100"
+  );
+
+  // hydrate target context per kind (batched in queries)
+  const ids = (kind: Report["target_kind"]) =>
+    reports.filter((r) => r.target_kind === kind).map((r) => r.target_id);
+  const inList = (xs: string[]) => `in.(${xs.join(",")})`;
+
+  const [users, events, messages] = await Promise.all([
+    ids("user").length
+      ? db<{ id: string; display_name: string }[]>(
+          c.env,
+          `profiles?id=${inList(ids("user"))}&select=id,display_name`
+        )
+      : [],
+    ids("event").length
+      ? db<{ id: string; title: string; status: string }[]>(
+          c.env,
+          `events?id=${inList(ids("event"))}&select=id,title,status`
+        )
+      : [],
+    ids("message").length
+      ? db<
+          { id: string; content: string | null; deleted_at: string | null; sender: { display_name: string } | null }[]
+        >(
+          c.env,
+          `messages?id=${inList(ids("message"))}&select=id,content,deleted_at,sender:profiles(display_name)`
+        )
+      : [],
+  ]);
+  const userById = new Map(users.map((u) => [u.id, u]));
+  const eventById = new Map(events.map((e) => [e.id, e]));
+  const messageById = new Map(messages.map((m) => [m.id, m]));
+
+  const rows = reports
+    .map((r) => {
+      let context = "";
+      let enforcement = "";
+      if (r.target_kind === "user") {
+        context = `User: ${escapeHtml(userById.get(r.target_id)?.display_name ?? "(deleted)")}`;
+      } else if (r.target_kind === "event") {
+        const e = eventById.get(r.target_id);
+        context = e
+          ? `Event: ${escapeHtml(e.title)} (${e.status})`
+          : "Event: (deleted)";
+        if (e && e.status === "active") {
+          enforcement = `<label><input type="checkbox" name="cancel_event" value="1"> also cancel event</label>`;
+        }
+      } else if (r.target_kind === "message") {
+        const m = messageById.get(r.target_id);
+        context = m
+          ? `Message from ${escapeHtml(m.sender?.display_name ?? "?")}: “${escapeHtml(m.content ?? "(photo)")}”${m.deleted_at ? " (already deleted)" : ""}`
+          : "Message: (deleted)";
+        if (m && !m.deleted_at) {
+          enforcement = `<label><input type="checkbox" name="delete_message" value="1"> also delete message</label>`;
+        }
+      } else {
+        context = `Photo: ${escapeHtml(r.target_id)}`;
+      }
+      return `<li style="margin-bottom:24px;border-bottom:1px solid #ddd;padding-bottom:16px">
+  <div><b>${r.target_kind}</b> · ${new Date(r.created_at).toLocaleString("en-US", { timeZone: "America/Chicago" })}
+    · ${r.reporter_id ? "user report" : "auto-flag"}</div>
+  <div>${context}</div>
+  <div>Reason: ${escapeHtml(r.reason)}</div>
+  <form method="post" action="/admin/reports/${r.id}" style="margin-top:8px">
+    <input name="note" placeholder="Resolution note (shown to the reporter)" style="width:60%">
+    ${enforcement}
+    <button name="verdict" value="actioned">Action</button>
+    <button name="verdict" value="dismissed">Dismiss</button>
+  </form>
+</li>`;
+    })
+    .join("\n");
+
+  return c.html(`<!doctype html><html><head><meta charset="utf-8"><title>Moderation queue</title></head>
+<body style="font-family:system-ui;max-width:800px;margin:40px auto;padding:0 16px">
+<h1>Moderation queue</h1>
+<p>${reports.length} open report(s) · 24h SLA (§8) · every resolution needs a reason — no silent bans.</p>
+<ul style="list-style:none;padding:0">${rows || "<li>Queue is empty 🎉</li>"}</ul>
+</body></html>`);
+});
+
+app.post("/admin/reports/:id", async (c) => {
+  if (!isAdmin(c, c.env)) return c.text("Unauthorized", 401);
+  const id = c.req.param("id");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return c.notFound();
+
+  const form = await c.req.formData();
+  const verdict = form.get("verdict");
+  if (verdict !== "actioned" && verdict !== "dismissed") {
+    return c.text("Bad verdict", 400);
   }
-  return c.html("<h1>Moderation queue</h1><p>Phase 2 — reports land here.</p>");
+  const note = String(form.get("note") ?? "").slice(0, 1000) || null;
+
+  const [report] = await db<Report[]>(c.env, `reports?id=eq.${id}&select=*`);
+  if (!report) return c.notFound();
+
+  // optional enforcement riders
+  if (verdict === "actioned") {
+    if (form.get("delete_message") && report.target_kind === "message") {
+      await db(c.env, `messages?id=eq.${report.target_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ deleted_at: new Date().toISOString() }),
+      });
+    }
+    if (form.get("cancel_event") && report.target_kind === "event") {
+      await db(c.env, `events?id=eq.${report.target_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+    }
+  }
+
+  await db(c.env, `reports?id=eq.${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: verdict, resolution_note: note }),
+  });
+  return c.redirect("/admin");
 });
 
 function escapeHtml(s: string): string {

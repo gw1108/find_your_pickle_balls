@@ -1,12 +1,37 @@
-import { DarkTheme, DefaultTheme, ThemeProvider , Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider , Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useCallback, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { registerForPush, useNotificationDeepLinks } from '@/lib/notifications';
+import { UnreadProvider } from '@/lib/unread';
 
 SplashScreen.preventAutoHideAsync();
+
+/** Push registration + notification deep links (§5) once signed in. */
+function PushSetup() {
+  const { session, needsOnboarding } = useAuth();
+  const router = useRouter();
+  const userId = session?.user.id;
+  const ready = !!userId && !needsOnboarding;
+
+  useEffect(() => {
+    if (ready && userId) registerForPush(userId);
+  }, [ready, userId]);
+
+  useNotificationDeepLinks(
+    useCallback(
+      (channelId: string) => {
+        router.push({ pathname: '/chat/[id]', params: { id: channelId } });
+      },
+      [router]
+    )
+  );
+  return null;
+}
 
 function RootNavigator() {
   const { session, loading, needsOnboarding } = useAuth();
@@ -43,8 +68,11 @@ export default function RootLayout() {
       {/* SDK 57 Android is edge-to-edge: both bars are translucent */}
       <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
         <AuthProvider>
-          <AnimatedSplashOverlay />
-          <RootNavigator />
+          <UnreadProvider>
+            <AnimatedSplashOverlay />
+            <PushSetup />
+            <RootNavigator />
+          </UnreadProvider>
         </AuthProvider>
       </KeyboardProvider>
     </ThemeProvider>
