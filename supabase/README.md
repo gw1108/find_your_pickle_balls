@@ -13,3 +13,6 @@ Source of truth for everything — users/events/venues *and* chat (channels/mess
 
 - `migrations/` — ordered SQL migrations (schema, RLS, RPCs, cron jobs)
 - `seed.sql` — dev seed data (a few Austin venues + test events)
+- `venues_import.sql` — generated Austin venue layer (PLAN.md §6). Regenerate
+  with `node scripts/import-venues.mjs`; apply via the dashboard SQL editor or
+  psql. Idempotent (skips venues already present within 100 m of same name).

@@ -299,6 +299,31 @@ End-to-end from code-complete: **~3–5 weeks with org accounts** (vs. a hard 4�
 
 *(The roadmap runs ~2 weeks longer than the pre-pivot plan — the §5 chat build is absorbed into Phases 1–2.)*
 
+### Phase 1 status (2026-07-06) — core loop built and verified
+
+Everything in the Phase 1 bullet is implemented and was driven end-to-end on
+the Android rig against the live Supabase project: sign-up → 18+ onboarding →
+map (MapLibre v11 + Stadia tiles, event pins with going-counts, list toggle,
+sport/skill filters) → create-event (venue picker over the imported Austin
+layer, 1,210 OSM venues) → auto host-RSVP + channel creation → group-chat
+send/persist/render + inbox with unread counts → profile edit (skills,
+optional IG handle, ghost mode). Notable decisions made during the build:
+chat thread is a custom FlashList-style FlatList (gifted-chat never needed);
+`react-native-keyboard-controller` handles the SDK 57 edge-to-edge keyboard;
+pnpm runs `nodeLinker: hoisted` (Windows CMake builds); migration
+`…000004_restore_default_grants.sql` restores API-role grants that db-push
+tables were missing.
+
+**Remaining to close out Phase 1:**
+1. **Two-account realtime chat test** — send/persist/render and same-client
+   broadcast echo are verified; live delivery *between two users* still needs
+   a second signed-in account (second emulator or sign-out/in).
+2. **First milestone EAS iOS build + TestFlight human check** (§9.1) — needs
+   the Apple Developer account (YOUR-TODO.md).
+3. Polish (non-blocking): name the unnamed OSM courts from their parent
+   park/street; bootstrap `expo lint` (eslint install is gated by pnpm
+   build-script approval).
+
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 
 ---

@@ -27,6 +27,13 @@
     },
     "plugins": [
       "expo-router",
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Pickup shows courts and games near you and lets you check in at a venue. Location is used only while the app is open."
+        }
+      ],
       [
         "expo-splash-screen",
         {

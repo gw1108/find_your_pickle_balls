@@ -1,7 +1,15 @@
 packages:
   - apps/*
   - packages/*
+# Windows + React Native: the default isolated (symlinked .pnpm) layout breaks
+# the native CMake/ninja builds in react-native-worklets/screens — object paths
+# blow the 250-char CMAKE_OBJECT_PATH_MAX and ninja loops on a "still dirty"
+# manifest through the symlinks. Hoisted = flat real directories, the layout
+# Expo recommends for RN monorepos.
+nodeLinker: hoisted
 allowBuilds:
   esbuild: true
   sharp: true
+  # eslint dep; ships prebuilt binaries, postinstall is only a fallback
+  unrs-resolver: false
   workerd: true
