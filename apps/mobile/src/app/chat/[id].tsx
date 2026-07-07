@@ -15,13 +15,12 @@ import {
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { errorMessage } from '@/lib/format';
+import { errorMessage , formatMessageTime } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
-import { formatMessageTime } from '@/lib/format';
 import {
   fetchMessages,
   markChannelRead,

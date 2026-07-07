@@ -6,13 +6,12 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { Chip } from '@/components/chips';
-import { errorMessage } from '@/lib/format';
+import { errorMessage , formatDistance, SKILL_LABEL, SPORT_EMOJI, SPORT_LABEL } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
-import { formatDistance, SKILL_LABEL, SPORT_EMOJI, SPORT_LABEL } from '@/lib/format';
 import { createEvent, fetchVenuesNear, type NearbyVenue } from '@/lib/queries';
 
 const AUSTIN: LatLng = { lat: 30.2672, lng: -97.7431 };

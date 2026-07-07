@@ -292,8 +292,8 @@ End-to-end from code-complete: **~3–5 weeks with org accounts** (vs. a hard 4�
 ## 12. Build roadmap
 
 - **Phase 0 — Rig & scaffolding (wk 1):** Android emulator rig (§9) + drive Nomad Table for UX study; monorepo (pnpm/Turborepo: `apps/mobile` Expo, `apps/web` Astro static + Hono Worker, `packages/shared` types+zod); Supabase project; EAS configured; CI.
-- **Phase 1 — Core loop (wk 2–6):** schema + RLS + `events_near` RPC; map screen (MapLibre) + list toggle + event cards; create-event (venue picker, sport, skill, player cap); one-tap join → event group chat (channels/messages tables + Realtime Broadcast, §5 MVP scope); profiles (IG handle = optional connect-later add-on, §3); venue layer import for launch metro. Dev loop runs on the Android rig (§9.1); first milestone EAS iOS build + TestFlight human check at the end of this phase.
-- **Phase 2 — Social & safety (wk 7–10):** DMs (on the same chat tables), unread counts + badge hygiene, push (Expo Push + Edge Functions) deep-linking into threads, block/report/moderation queue + admin page (now covering chat messages, §5/§8), account deletion (in-app + web), 18+ gate, age-signal APIs behind a flag; **live court occupancy (§6.1)**: `checkins` table + geofenced check-in prompt + live venue-pin state + privacy controls (opt-in, ghost mode, TTL expiry). Historical popularity bars and the paddle-stack queue are post-launch fast-follows.
+- **Phase 1 — Core loop (wk 2–6):** schema + RLS + `events_near` RPC; map screen (MapLibre) + list toggle + event cards; create-event (venue picker, sport, skill, player cap); one-tap join → event group chat (channels/messages tables + Realtime Broadcast, §5 MVP scope); profiles (IG handle = optional connect-later add-on, §3); venue layer import for launch metro. Dev loop runs on the Android rig (§9.1). **Done 2026-07-06** (status block below); the end-of-phase iOS milestone moved into Phase 2.
+- **Phase 2 — Social & safety (wk 7–10):** DMs (on the same chat tables), unread counts + badge hygiene, push (Expo Push + Edge Functions) deep-linking into threads, block/report/moderation queue + admin page (now covering chat messages, §5/§8), account deletion (in-app + web), 18+ gate, age-signal APIs behind a flag; **live court occupancy (§6.1)**: `checkins` table + geofenced check-in prompt + live venue-pin state + privacy controls (opt-in, ghost mode, TTL expiry). Historical popularity bars and the paddle-stack queue are post-launch fast-follows. **End of phase: first milestone EAS iOS build → TestFlight on a physical iPhone + the §9.1 human checklist** (moved from Phase 1; Apple Developer account in hand since 2026-07-06 — push and deep links land in this phase, so the checklist exercises them too).
 - **Phase 3 — Website & links (wk 10–11):** Astro marketing + compliance pages; Hono Worker for `/e/[eventId]` OG pages + `/admin`; AASA/assetlinks + Smart App Banner; waitlist page live from Phase 0 (needed early for GTM).
 - **Phase 4 — Polish & beta (wk 12–14):** the Nomad-Table-complaint list (perf, badges, navigation); TestFlight/closed-track beta with ambassadors; store submissions (§10 must have started ~L-9wk in parallel).
 
@@ -314,15 +314,27 @@ pnpm runs `nodeLinker: hoisted` (Windows CMake builds); migration
 `…000004_restore_default_grants.sql` restores API-role grants that db-push
 tables were missing.
 
-**Remaining to close out Phase 1:**
-1. **Two-account realtime chat test** — send/persist/render and same-client
-   broadcast echo are verified; live delivery *between two users* still needs
-   a second signed-in account (second emulator or sign-out/in).
-2. **First milestone EAS iOS build + TestFlight human check** (§9.1) — needs
-   the Apple Developer account (YOUR-TODO.md).
-3. Polish (non-blocking): name the unnamed OSM courts from their parent
-   park/street; bootstrap `expo lint` (eslint install is gated by pnpm
-   build-script approval).
+**Phase 1 closed 2026-07-06 — scorecard:**
+1. ~~Two-account realtime chat test~~ — **done 2026-07-06**: two emulators
+   (second AVD cloned at 2.5GB RAM), George on one, fresh sign-up "Player B"
+   on the other; one-tap join → chat, live Broadcast delivery verified in
+   *both* directions with screenshots. Rig note: the emulator wedges at boot
+   when launched from an agent shell with default GPU — launch with
+   `-no-window -gpu swiftshader_indirect`.
+2. **First milestone EAS iOS build + TestFlight human check** (§9.1) —
+   **moved to the end of Phase 2** (see §12). The Apple Developer account was
+   signed up 2026-07-06 so it's no longer blocked; batching it with Phase 2's
+   push-notification and deep-link work gives the human checklist more to
+   verify in one TestFlight pass.
+3. ~~Polish~~ — **done 2026-07-06**: `expo lint` bootstrapped and clean
+   (fixed 3 `set-state-in-effect` errors + duplicate imports); 661 unnamed
+   OSM courts renamed from their containing park/school. Rename + top-up
+   **applied to the live DB and verified via REST**: 1,220 venues, generic
+   names down from ~1,200 to ~540 (courts with no named parent area in OSM).
+4. New polish items found during the chat test (non-blocking, fold into
+   Phase 4's Nomad-complaint pass): chat list renders blank while the
+   keyboard is open (inverted-FlatList inset quirk); broadcast-delivered
+   messages show the "Player" placeholder name until a refetch.
 
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 

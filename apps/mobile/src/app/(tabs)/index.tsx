@@ -10,12 +10,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Chip, SkillChips } from '@/components/chips';
 import { EventCard } from '@/components/event-card';
-import { errorMessage } from '@/lib/format';
+import { errorMessage , SPORT_EMOJI, SPORT_LABEL } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { SPORT_EMOJI, SPORT_LABEL } from '@/lib/format';
 import { fetchEventsNear, type NearbyEvent } from '@/lib/queries';
 
 const MAP_STYLE_URL =

@@ -4,12 +4,11 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { errorMessage } from '@/lib/format';
+import { errorMessage , formatEventTime, formatMessageTime } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatEventTime, formatMessageTime } from '@/lib/format';
 import { fetchMyChannels } from '@/lib/queries';
 
 export default function ChatsScreen() {

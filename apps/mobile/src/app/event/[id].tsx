@@ -2,18 +2,17 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { errorMessage } from '@/lib/format';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { useAuth } from '@/lib/auth';
-import {
+import { errorMessage ,
   formatEventTime,
   formatSkillRange,
   SPORT_EMOJI,
   SPORT_LABEL,
 } from '@/lib/format';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { useAuth } from '@/lib/auth';
 import {
   fetchEventChannelId,
   fetchEventDetail,
@@ -35,15 +34,26 @@ export default function EventScreen() {
 
   const load = useCallback(async () => {
     try {
-      setEvent(await fetchEventDetail(id));
+      const detail = await fetchEventDetail(id);
+      setEvent(detail);
     } catch (e) {
       Alert.alert('Could not load event', errorMessage(e));
     }
   }, [id]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    fetchEventDetail(id)
+      .then((detail) => {
+        if (!cancelled) setEvent(detail);
+      })
+      .catch((e) => {
+        if (!cancelled) Alert.alert('Could not load event', errorMessage(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   if (!event) {
     return (

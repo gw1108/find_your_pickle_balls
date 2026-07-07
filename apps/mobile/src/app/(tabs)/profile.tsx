@@ -1,16 +1,15 @@
 import { SKILL_LEVELS, SPORTS, igHandleSchema, type SkillLevel, type Sport } from '@pickup/shared';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Chip, SportChips } from '@/components/chips';
-import { errorMessage } from '@/lib/format';
+import { errorMessage , SKILL_LABEL, SPORT_LABEL } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
-import { SKILL_LABEL, SPORT_LABEL } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 
 export default function ProfileScreen() {
@@ -24,16 +23,19 @@ export default function ProfileScreen() {
   const [skills, setSkills] = useState<Partial<Record<Sport, SkillLevel>>>({});
   const [ghostMode, setGhostMode] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [seededFor, setSeededFor] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!profile) return;
+  // Seed the form from the loaded profile during render (profile can arrive
+  // after mount); keyed by user id so a refresh never clobbers in-flight edits.
+  if (profile && seededFor !== profile.id) {
+    setSeededFor(profile.id);
     setName(profile.display_name);
     setBio(profile.bio ?? '');
     setIgHandle(profile.ig_handle ?? '');
     setSports(profile.sports);
     setSkills(profile.skill_levels ?? {});
     setGhostMode(profile.ghost_mode);
-  }, [profile]);
+  }
 
   const save = async () => {
     // IG handle is optional connect-later social proof (§3) — never required
