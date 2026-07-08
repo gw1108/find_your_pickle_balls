@@ -1,0 +1,5 @@
+# Cloudflare Pages headers (https://developers.cloudflare.com/pages/configuration/headers/)
+# The AASA file has no extension, so Pages would otherwise serve it as
+# application/octet-stream; Apple's CDN requires application/json.
+/.well-known/apple-app-site-association
+  Content-Type: application/json

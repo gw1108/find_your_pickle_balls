@@ -1,14 +1,108 @@
 ---
 import Base from "../layouts/Base.astro";
+
+// Where the waitlist form posts. Relative "/waitlist" works once the worker
+// is routed on the same zone (pickupsports.app/waitlist*); until then, set
+// PUBLIC_WAITLIST_ENDPOINT in the Pages build env to the workers.dev URL,
+// e.g. https://pickup-worker.<account>.workers.dev/waitlist
+const waitlistEndpoint =
+  import.meta.env.PUBLIC_WAITLIST_ENDPOINT ?? "/waitlist";
 ---
 
 <Base title="Pickup — see who's playing right now">
   <h1>Pickup</h1>
-  <p>
-    Free, map-first pickup sports. See which courts are live <em>right now</em>,
-    join a pickleball game's group chat in one tap, and never text "anyone playing?"
-    into the void again.
+  <p class="tagline">
+    Free, map-first pickup sports. See which courts are live
+    <em>right now</em> and be in a game's group chat in one tap.
   </p>
-  <p><strong>Coming soon to iOS and Android.</strong></p>
-  <!-- Waitlist form goes here (Phase 0 GTM requirement, PLAN.md §12) -->
+
+  <section>
+    <h2>🟢 Live courts, not stale listings</h2>
+    <p>
+      Venue pins show who's checked in at this moment — players there now,
+      courts open vs. full, skill mix. Stop texting "anyone playing?" into
+      the void.
+    </p>
+
+    <h2>⚡ One tap and you're in</h2>
+    <p>
+      No host approval, no fees, no back-and-forth. Tap "I'm interested" and
+      you're instantly in the event's group chat with everyone who's going.
+    </p>
+
+    <h2>🏓 Built for how pickup actually works</h2>
+    <p>
+      Skill-level filters (3.0 / 3.5 / 4.0+), player caps with "need 2 more
+      for doubles", and recurring weekly events for organizers. Pickleball
+      first, basketball next. Free for players, forever.
+    </p>
+  </section>
+
+  <section id="waitlist">
+    <h2>Get in first</h2>
+    <p>
+      Launching in Austin. Join the waitlist and we'll email you when the
+      app hits the stores.
+    </p>
+    <p id="waitlist-msg" class="error" hidden></p>
+    <form method="post" action={waitlistEndpoint}>
+      <input
+        type="email"
+        name="email"
+        required
+        maxlength="254"
+        placeholder="you@example.com"
+        autocomplete="email"
+      />
+      <input type="hidden" name="source" value="landing" />
+      <!-- honeypot: real users never see or fill this -->
+      <input
+        type="text"
+        name="website"
+        tabindex="-1"
+        autocomplete="off"
+        aria-hidden="true"
+        class="hp"
+      />
+      <button type="submit">Join the waitlist</button>
+    </form>
+  </section>
+
+  <script>
+    // The worker bounces invalid/failed submissions back with ?waitlist=…
+    const status = new URLSearchParams(location.search).get("waitlist");
+    if (status) {
+      const msg = document.getElementById("waitlist-msg")!;
+      msg.textContent =
+        status === "invalid"
+          ? "That email doesn't look right — mind checking it?"
+          : "Something went wrong on our end. Please try again.";
+      msg.hidden = false;
+    }
+  </script>
+
+  <style>
+    .tagline { font-size: 1.15rem; }
+    section { margin-top: 2.5rem; }
+    form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    input[type="email"] {
+      flex: 1 1 16rem;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    button {
+      background: #208aef;
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .hp { position: absolute; left: -9999px; }
+    .error { color: #c0392b; }
+  </style>
 </Base>

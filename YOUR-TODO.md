@@ -1,113 +1,96 @@
 # Your action list (human-only steps)
 
-Phase 0 setup, the Phase 1 unblockers, and the Phase 2 unblockers (0a, 0a½)
-are **done** — history at the bottom. What's left, in the order you should
-do it. Every step below is spelled out click-by-click; anything not listed
-here, Claude can do from the agent shell.
+**What this file is:** the owner's punch-list — the queue of steps only a
+human can do (interactive logins like `wrangler login`/`eas-cli`, dashboard
+clicks, payments, live `db push`, physical-device tests). Agents hit one of
+these, write the step here spelled out click-by-click, and continue with
+whatever isn't blocked; the owner works the list top-to-bottom and then
+prompts the next phase. Anything *not* listed here, Claude can do from the
+agent shell.
+
+**Instructions for agents maintaining this file:**
+
+- **Queue, don't retry.** When a permission-gated action blocks you, add a
+  section here with the exact commands/clicks (assume no prior context) and
+  a `- [ ]` checklist line per outcome, then move on.
+- **Verify, then delete.** When a section looks done (owner says so, or its
+  checkboxes are ticked), verify it from the agent shell first — query the
+  live DB, curl the endpoint, drive the rig — and only then **delete the
+  entire section**. Completed work does not accumulate here; lasting facts
+  go to the PLAN.md §12 status blocks (history), memory (rig gotchas,
+  commands that worked), or code comments. If verification fails, keep the
+  section and note what you observed instead.
+- **Keep it ordered by when the owner should act** (next actionable first,
+  "whenever" items last), and keep section labels stable — PLAN.md and past
+  status blocks reference them (0a, 0b, …).
+
+Everything through Phase 2 (migrations, venue layer, push notifications,
+Edge Functions) is done and has been deleted per the rules above — see the
+PLAN.md §12 status blocks for the history.
 
 ---
 
-## 0b. Finish push notifications — DONE 2026-07-07 ✓
+## 0e. Phase 3 deploys — website (~15 min left)
 
-Service-account key uploaded and assigned for FCM V1, then verified
-**end-to-end on the rig**: real FCM delivery to a backgrounded app
-(notification rendered "Pickup · Sunset · Player: Real push test…"),
-and tapping it deep-linked straight into the Sunset thread. Nothing
-left to do here. (Rig gotcha discovered on the way: booting the
-emulator with `-no-snapshot-save` discards app installs on exit — the
-delivery failures were a reverted stale APK, not a config problem.)
+0e-1 (waitlist migration) and 0e-2 (worker deploy + secrets) are **done and
+verified** 2026-07-07 — the worker is live at
+`https://pickup-worker.pickupsports.workers.dev`. One owner-gated step
+remains:
 
-<details><summary>Original instructions (kept for reference)</summary>
+### 0e-3. Create the Cloudflare Pages site (~15 min)
 
-**State as of 2026-07-07:** `google-services.json` is in the app and the
-client half is fully verified — the rebuilt dev build registered a real
-`ExponentPushToken` into `push_tokens` on sign-in. A test send through
-Expo's push API returned `InvalidCredentials`, which means exactly one
-thing is missing: Expo's servers don't yet have permission to talk to
-your Firebase project. That permission is a "service account key" (a JSON
-file) that you download from Firebase and upload to Expo (EAS). Steps:
+1. https://dash.cloudflare.com → **Workers & Pages** → **Create** →
+   **Pages** → **Connect to Git** → pick this repo (push it to GitHub
+   first if it isn't yet — ask Claude to set the remote up if needed).
+2. Build settings:
+   - Framework preset: **Astro**
+   - Build command: `pnpm --filter web build`
+   - Build output directory: `apps/web/dist`
+   - Root directory: leave `/` (the monorepo root, so pnpm sees the workspace)
+3. **Environment variable** (Settings → Environment variables):
+   - `PUBLIC_WAITLIST_ENDPOINT` =
+     `https://pickup-worker.pickupsports.workers.dev/waitlist`.
+     Without it the form posts to a relative `/waitlist`, which only works
+     once the real domain routes site + worker on one zone.
+4. Deploy → you get `https://<project>.pages.dev`. Submit the waitlist
+   form with a real email → should land on `/thanks` and the row should
+   appear in the Supabase `waitlist` table.
 
-### 0b-1. Download the service account key from Firebase
+**When you buy the real domain** (item 3 below): point it at the Pages
+project, add worker routes for `pickupsports.app/e/*`, `/admin*` and
+`/waitlist*` (then `PUBLIC_WAITLIST_ENDPOINT` can go away), and tell
+Claude if the name isn't `pickupsports.app` so it can search-replace.
 
-1. Open https://console.firebase.google.com and sign in with the Google
-   account you used to create the Firebase project (the one that produced
-   `google-services.json` — its Android app is `app.pickupsports.mobile`).
-2. Click the project to open it.
-3. Click the **gear icon** next to "Project Overview" (top-left) →
-   **Project settings**.
-4. Go to the **Service accounts** tab (top of the page).
-5. Make sure **Firebase Admin SDK** is selected in the left pane, then
-   click the blue **Generate new private key** button → confirm
-   **Generate key** in the dialog.
-6. A file like `<project-name>-firebase-adminsdk-xxxxx.json` downloads.
-   **This file is a secret.** Leave it in `Downloads` — do NOT move it
-   into the repo. You'll just point the upload tool at it.
+### 0e-4. Deep-link placeholders (whenever the values exist — no rush)
 
-### 0b-2. Upload the key to EAS
+Universal links stay dormant until these three placeholders get real
+values; the app + site work fine without them:
 
-Open a terminal (regular PowerShell is fine) and run, one at a time:
+- [ ] `apps/web/public/.well-known/apple-app-site-association`: replace
+  `TEAMID` with your Apple Team ID (visible at
+  https://developer.apple.com/account → Membership details, once the
+  enrollment activates).
+- [ ] `apps/web/public/.well-known/assetlinks.json`: replace the SHA-256
+  placeholder — after the first production Android build run
+  `npx eas-cli credentials` (Android → production → Keystore) and copy the
+  **SHA256 Fingerprint**, or later use Play Console's App Signing page.
+- [ ] `apps/worker/src/index.ts` + `apps/web/src/layouts/Base.astro`:
+  swap the commented `apple-itunes-app` meta (`app-id=TODO`) for the real
+  App Store id once the app is listed.
 
-```sh
-cd C:\GameDev\find_your_pickle_balls\apps\mobile
-npx eas-cli login
-```
-
-- Log in with your Expo account (the project lives under the
-  **gw1108s-team** org — use whatever account owns that).
-
-```sh
-npx eas-cli credentials
-```
-
-Then walk the interactive menu:
-
-1. **Select platform** → `Android`.
-2. **Which build profile?** → `development` (the Google Service Account
-   is project-wide, so any profile works — pick development).
-3. In the actions menu choose **Google Service Account** (it may be
-   worded "Manage your Google Service Account Key for Push Notifications
-   (FCM V1)").
-4. Choose **Set up a Google Service Account Key for Push Notifications
-   (FCM V1)** → **Upload a new service account key**.
-5. It scans for JSON keys and/or asks for a path — give it the full path
-   to the file you downloaded, e.g.
-   `C:\Users\georg\Downloads\<project-name>-firebase-adminsdk-xxxxx.json`.
-6. When it confirms the key is assigned, exit the menu (Ctrl+C is fine).
-
-### 0b-3. Verify it worked (~30 sec)
-
-Paste this into any terminal:
-
-```sh
-curl -s -X POST https://exp.host/--/api/v2/push/send -H "Content-Type: application/json" -d "{\"to\":\"ExponentPushToken[CKQ1wcAIlz3OwlGwp7Ojus]\",\"title\":\"Push test\",\"body\":\"it works\",\"channelId\":\"chat\"}"
-```
-
-- **Before** the upload this returned `"error":"InvalidCredentials"`.
-- **After** the upload it should return `{"data":{"status":"ok",...}}`.
-- That token belongs to the throwaway `pushtest@pickup.dev` account on
-  the Medium_Phone emulator (currently shut down, so the message won't
-  render anywhere — `status: ok` is the success signal).
-
-- [X] Key downloaded from Firebase (0b-1)
-- [X] Key uploaded via `eas credentials` (0b-2)
-- [X] Test send returns `status: ok` (0b-3)
-- [X] End-to-end delivery + deep-link verified on the rig (2026-07-07)
-
-</details>
+- [ ] 0e-3 Pages site live, waitlist form round-trips
 
 ---
 
-## 0d. iOS milestone (§9.1) — MOVED TO PHASE 3
+## 0d. iOS milestone (§9.1) — waiting on Apple
 
 **Blocked 2026-07-07:** the Apple Developer Program enrollment payment is
 still pending (EAS failed with "no team associated with your Apple
 account" — that resolves itself when Apple activates the membership).
-Decision: Phase 2 closes Android-complete; this milestone rides along
-with Phase 3 instead.
 
 - [ ] **Wait for the "Welcome to the Apple Developer Program" email**,
-  then run the steps below (they're unchanged and pick up where the
-  failed attempt left off — your Apple session is cached, no 2FA again).
+  then run the steps below (they pick up where the failed attempt left
+  off — your Apple session is cached, no 2FA again).
 
 Goal: the first iOS build of the app, on your physical iPhone, with a
 human pass over the checklist. Per PLAN.md the route is an EAS cloud
@@ -132,8 +115,8 @@ First-run prompts, in the order they appear:
    creates and stores it for you).
 4. **"Generate a new Apple Provisioning Profile?"** → Yes.
 5. **Push Notifications key (APNs)** — if it asks to set one up → **Yes**
-   (this is the iOS equivalent of what you just did for FCM; EAS manages
-   the key). If it doesn't ask, fix it afterwards with
+   (this is the iOS equivalent of the FCM key you already did; EAS
+   manages the key). If it doesn't ask, fix it afterwards with
    `npx eas-cli credentials` → iOS → Push Notifications → set up.
 6. The build queues in the cloud (~15–25 min). You can watch the link it
    prints, or just wait for the terminal to finish. This uses 1 of your
@@ -175,9 +158,12 @@ wired yet — that's expected; note anything *else* that's broken):
 - [ ] One-tap join an event → lands in the group chat; send a message
 - [ ] Chat cold-open: force-quit the app, reopen straight into a thread
 - [ ] Push arrives on the iPhone (have Claude send a message from an
-      emulator account to a channel you're in, or use the 0b-3 curl with
-      your iPhone's token — ask Claude to fetch it from `push_tokens`)
+      emulator account to a channel you're in, or ask Claude to fetch
+      your iPhone's token from `push_tokens` for a direct test send)
 - [ ] Tapping the push deep-links into the correct thread
+- [ ] Invite link: open `https://pickup-worker.pickupsports.workers.dev/e/653afb78-36c3-4851-9503-74d7e04b82cb`
+      in Safari → "Open in the Pickup app" → lands on the
+      event screen
 - [ ] Geofenced check-in prompt + venue sheet (GPS-spoof isn't possible
       on a real phone — only test if you're physically near a venue,
       otherwise skip)
@@ -189,32 +175,6 @@ per §9.1 rather than interrupting the Android loop.
 
 - [ ] Build submitted and installed via TestFlight
 - [ ] Checklist run; failures noted
-
----
-
-## 0c. Admin moderation queue secrets (when the worker deploys, Phase 3)
-
-The admin page code is done; it just needs its secrets when the worker
-first deploys. From `apps/worker`:
-
-```sh
-cd C:\GameDev\find_your_pickle_balls\apps\worker
-npx wrangler login
-npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-npx wrangler secret put ADMIN_TOKEN
-```
-
-- `SUPABASE_SERVICE_ROLE_KEY`: Supabase Dashboard →
-  https://supabase.com/dashboard/project/myqkjecfuqqjiknzqtbi →
-  **Settings** (gear) → **API** → copy the **service_role** key (the
-  secret one, NOT anon). Paste when wrangler prompts.
-- `ADMIN_TOKEN`: any long random string — it's the moderation-page
-  password. Generate one with:
-  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-  Save it in your password manager; you'll type it into the login box at
-  `https://<worker-url>/admin`.
-
-- [ ] Both secrets set (only matters once Phase 3 deploys the worker)
 
 ---
 
@@ -269,33 +229,9 @@ anyone can sign up with a fake email. Before ambassadors/beta testers:
   (do first, longest wait) → Apple Developer *org* account ($99/yr) +
   Play Console org ($25 once). The org accounts keep your personal
   name/address off the store listings and skip Google's 12-tester gate.
+  (Your individual Apple Developer account from 2026-07-06 converts to an
+  org account using the LLC's D-U-N-S number — nothing to redo now.)
 - [ ] **Domain** — `pickupsports.app` is a placeholder in the code; buy
   the real domain (or tell Claude the actual name to search-replace)
-  before the website or deep links go live. Also unblocks SMTP (item 2).
-- [X] **Apple Developer account** — signed up 2026-07-06 (individual).
-  §10 still calls for converting to an *organization* account before
-  store launch — Apple supports individual → org conversion using the
-  LLC's D-U-N-S number, so nothing to redo now.
-
----
-
-## Done (history)
-
-- **0a. Phase 2 unblockers** — done 2026-07-07: migration pushed, Edge
-  Functions deployed, full verification pass on the two-emulator rig
-  (geofenced check-in, live cross-device pin updates, DMs both
-  directions, unread badges, report, soft-delete broadcast,
-  block/unblock).
-- **0a½. Occupancy-count fix migration** — pushed & verified live
-  2026-07-07 (`my_blocked_players` RPC responding; venue_occupancy now
-  counts players, not distinct sports).
-- **0b (first half)** — Firebase project created, `google-services.json`
-  in `apps/mobile/`, `app.json` wired, dev build rebuilt with it, and
-  push **registration** verified end-to-end on-device 2026-07-07 (real
-  `ExponentPushToken` saved to `push_tokens` on sign-in).
-- **Venue rename + top-up** — done 2026-07-06: 1,220 venues live, 661
-  renamed from containing park/school. (For future SQL files:
-  `pnpm dlx supabase db query --linked --file <path>`.)
-- **Phase 0 + Phase 1 unblockers** — done 2026-07-06: migrations pushed,
-  Austin venue layer loaded (1,210 OSM venues), email confirmation off
-  for dev.
+  before the website or deep links go live. Also unblocks SMTP (item 2)
+  and the 0e-3 note about routing the worker on the real zone.

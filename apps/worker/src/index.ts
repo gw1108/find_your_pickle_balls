@@ -32,6 +32,44 @@ type Report = {
 
 const app = new Hono<{ Bindings: Env }>();
 
+// ---------------------------------------------------------------------------
+// Waitlist (PLAN.md §11 GTM — the landing page's one job pre-launch).
+// Plain HTML form POST from the Astro site (top-level navigation, so no CORS),
+// inserted with the ANON key under an insert-only RLS policy.
+// ---------------------------------------------------------------------------
+
+app.post("/waitlist", async (c) => {
+  const form = await c.req.formData();
+  // honeypot: hidden field real users never fill — bots get a fake success
+  if (form.get("website")) return c.redirect(`${c.env.SITE_ORIGIN}/thanks`);
+
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 254) {
+    return c.redirect(`${c.env.SITE_ORIGIN}/?waitlist=invalid#waitlist`);
+  }
+  const source = String(form.get("source") ?? "landing").slice(0, 40);
+
+  const res = await fetch(
+    `${c.env.SUPABASE_URL}/rest/v1/waitlist?on_conflict=email`,
+    {
+      method: "POST",
+      headers: {
+        apikey: c.env.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${c.env.SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+        // no select policy on waitlist → must not ask for the row back
+        Prefer: "resolution=ignore-duplicates,return=minimal",
+      },
+      body: JSON.stringify({ email, source }),
+    }
+  );
+  if (!res.ok) {
+    console.error(`waitlist insert failed: ${res.status} ${await res.text()}`);
+    return c.redirect(`${c.env.SITE_ORIGIN}/?waitlist=error#waitlist`);
+  }
+  return c.redirect(`${c.env.SITE_ORIGIN}/thanks`);
+});
+
 /** Per-event OG invite page (PLAN.md §7) — unfurls properly in iMessage/WhatsApp,
  * deep-links into the app via AASA/assetlinks, falls back to the store page. */
 app.get("/e/:eventId", async (c) => {
@@ -46,13 +84,15 @@ app.get("/e/:eventId", async (c) => {
         apikey: c.env.SUPABASE_ANON_KEY,
         Authorization: `Bearer ${c.env.SUPABASE_ANON_KEY}`,
         "Content-Type": "application/json",
+        // event_public RETURNS TABLE → PostgREST sends an array unless we
+        // ask for exactly one object (406s instead when there's no row)
+        Accept: "application/vnd.pgrst.object+json",
       },
       body: JSON.stringify({ p_event_id: eventId }),
     }
   );
   if (!res.ok) return c.notFound();
-  const event = (await res.json()) as PublicEvent | null;
-  if (!event) return c.notFound();
+  const event = (await res.json()) as PublicEvent;
 
   const when = new Date(event.starts_at).toLocaleString("en-US", {
     weekday: "short",
@@ -71,15 +111,32 @@ app.get("/e/:eventId", async (c) => {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
+<meta name="description" content="${escapeHtml(desc)}">
+<meta property="og:site_name" content="Pickup">
 <meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(desc)}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="${c.env.SITE_ORIGIN}/e/${eventId}">
+<meta name="twitter:card" content="summary">
+<!-- Smart App Banner — uncomment once the App Store id exists (PLAN.md §7):
+<meta name="apple-itunes-app" content="app-id=TODO, app-argument=${c.env.SITE_ORIGIN}/e/${eventId}">
+-->
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 0 auto; padding: 2rem 1rem; line-height: 1.6; }
+  .cta { display: inline-block; background: #208AEF; color: #fff; padding: 0.75rem 1.5rem; border-radius: 8px; text-decoration: none; font-weight: 600; }
+  .muted { color: #666; font-size: 0.9rem; }
+</style>
 </head>
 <body>
+<p class="muted">Pickup · ${escapeHtml(event.sport)}</p>
 <h1>${escapeHtml(event.title)}</h1>
-<p>${escapeHtml(desc)}</p>
-<p><a href="pickup://e/${eventId}">Open in the Pickup app</a></p>
+<p>${escapeHtml(when)} · ${escapeHtml(desc)}</p>
+<p><a class="cta" href="pickup://e/${eventId}">Open in the Pickup app</a></p>
+<!-- Store fallback (PLAN.md §7): swap for App Store / Play links at launch.
+     Play link gets the Install Referrer for deferred deep-linking:
+     https://play.google.com/store/apps/details?id=app.pickupsports.mobile&referrer=e%3D${eventId} -->
+<p class="muted">Don't have the app yet? It's coming soon —
+  <a href="${c.env.SITE_ORIGIN}/#waitlist">join the waitlist</a>.</p>
 </body>
 </html>`);
 });
@@ -106,6 +163,9 @@ async function db<T>(env: Env, path: string, init?: RequestInit): Promise<T> {
 }
 
 function isAdmin(c: Context<{ Bindings: Env }>, env: Env): boolean {
+  // Fail closed while the ADMIN_TOKEN secret is unset — otherwise a fresh
+  // deploy compares undefined === undefined and lets everyone in.
+  if (!env.ADMIN_TOKEN) return false;
   return (
     getCookie(c, "admin_token") === env.ADMIN_TOKEN ||
     c.req.header("Authorization") === `Bearer ${env.ADMIN_TOKEN}`

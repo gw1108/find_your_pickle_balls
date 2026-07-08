@@ -50,6 +50,10 @@ function RootNavigator() {
       </Stack.Protected>
       <Stack.Protected guard={ready}>
         <Stack.Screen name="(tabs)" />
+        {/* invite-link entry (/e/<id> universal link or pickup://e/<id>) —
+            guarded so a signed-out open falls back to sign-in instead of
+            redirecting into a removed screen (renders blank) */}
+        <Stack.Screen name="e/[eventId]" />
         <Stack.Screen name="event/[id]" options={{ headerShown: true, title: '' }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: true, title: '' }} />
         <Stack.Screen

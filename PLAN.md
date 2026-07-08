@@ -404,6 +404,58 @@ TestFlight milestone (0d) moves into Phase 3 rather than holding this
 phase open. **Phase 2 is closed — Android-complete, all §12 Phase 2
 scope built and verified live.**
 
+### Phase 3 status (2026-07-07) — built and verified; deploys are owner steps
+
+Everything in the Phase 3 bullet is code-complete; typecheck + lint clean.
+What shipped / was verified:
+
+- **Marketing site (Astro)**: real landing copy (live-courts headline, one-tap
+  join, free-forever), waitlist form (honeypot + `?waitlist=` error states),
+  `/thanks` page; compliance pages already existed from Phases 1–2.
+  `public/_headers` added so Pages serves the extensionless AASA file as
+  `application/json`.
+- **Waitlist backend**: `waitlist` table migration (`20260707000002`,
+  insert-only RLS, unique email) + `POST /waitlist` on the worker (anon key,
+  `resolution=ignore-duplicates`, redirects back to the site). Verified via
+  `wrangler dev`: honeypot, invalid-email, and error paths all redirect
+  correctly; the 201 path needs the owner's `db push` (YOUR-TODO 0e-1).
+- **/e/[eventId] OG page**: verified against the live DB ("Sunset" event
+  unfurls with going-count/cap). Fixed a latent Phase 2 bug found by this
+  test: `event_public` RETURNS TABLE, so PostgREST sends an array — the page
+  now requests `application/vnd.pgrst.object+json` (single object, clean 406
+  → 404 on unknown ids). Page also gained og:site_name/twitter tags, a
+  commented Smart-App-Banner meta (needs App Store id), and a
+  waitlist-fallback CTA (swaps to store links + Play Install Referrer at
+  launch).
+- **Deep links, app side**: `associatedDomains` (iOS) + `autoVerify`
+  intentFilters (Android) for `pickupsports.app/e/*` in app.json;
+  new `e/[eventId]` route redirects into `event/[id]`, declared inside the
+  root layout's `ready` guard — verified on the rig: signed-out deep link
+  falls back to sign-in (was a blank screen before the guard fix), signed-in
+  `pickup://e/<id>` cold/warm opens land on the event screen with the
+  "I'm interested" CTA.
+- **Owner queue (YOUR-TODO 0e)**: push waitlist migration → `wrangler deploy`
+  + secrets (0c) → Cloudflare Pages project with `PUBLIC_WAITLIST_ENDPOINT`.
+  Universal-link placeholders (Apple TEAMID, Play signing SHA-256, App Store
+  id) stay dormant until those values exist (0e-4). **iOS TestFlight
+  milestone (0d) still waits on Apple Developer enrollment activation** —
+  it rides with this phase per §12 but is independent of the website work.
+- Rig note for the daily loop: "Cannot find native module X" after an
+  emulator boot = the snapshot restored a stale APK — fix is
+  `adb install -r apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`
+  (rebuilding is unnecessary).
+
+**Deploy update (2026-07-07, later):** 0e-1 and 0e-2 are done. The waitlist
+migration is on the live DB (verified: anon zero-row probe returns 200 `[]`).
+The worker is live at `https://pickup-worker.pickupsports.workers.dev`
+(workers.dev subdomain `pickupsports` registered account-wide); both secrets
+set; event OG page returns 200 against the live DB; `/admin` fails closed
+(401 on no/wrong token). During the deploy Claude found and fixed an
+admin-auth hole — with `ADMIN_TOKEN` unset, `isAdmin` compared
+`undefined === undefined` and admitted everyone; `isAdmin` now returns false
+when the secret is missing (fix deployed by the owner). Remaining owner
+steps: Pages site (0e-3), deep-link placeholders (0e-4), iOS milestone (0d).
+
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 
 ---

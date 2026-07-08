@@ -2,10 +2,13 @@ name = "pickup-worker"
 main = "src/index.ts"
 compatibility_date = "2026-06-01"
 
-# Set with: wrangler secret put SUPABASE_URL / SUPABASE_ANON_KEY / ADMIN_TOKEN
-#           wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-# The OG page uses the ANON key (RLS applies). The service-role key exists
-# solely for the token-gated /admin moderation queue (Phase 2, §8).
+# Secrets (owner, YOUR-TODO 0c): wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#                                wrangler secret put ADMIN_TOKEN
+# The OG page + waitlist use the ANON key (RLS applies) — public by design,
+# so it lives in [vars]. The service-role key exists solely for the
+# token-gated /admin moderation queue (§8).
 
 [vars]
 SITE_ORIGIN = "https://pickupsports.app"
+SUPABASE_URL = "https://myqkjecfuqqjiknzqtbi.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15cWtqZWNmdXFxamlrbnpxdGJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMDA0MjksImV4cCI6MjA5ODg3NjQyOX0.nwFcEKPaLRUFb5sjoSrob2mkpFQOI-kSKC89A7GAWag"
