@@ -49,20 +49,22 @@ app.post("/waitlist", async (c) => {
   }
   const source = String(form.get("source") ?? "landing").slice(0, 40);
 
-  const res = await fetch(
-    `${c.env.SUPABASE_URL}/rest/v1/waitlist?on_conflict=email`,
-    {
-      method: "POST",
-      headers: {
-        apikey: c.env.SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${c.env.SUPABASE_ANON_KEY}`,
-        "Content-Type": "application/json",
-        // no select policy on waitlist → must not ask for the row back
-        Prefer: "resolution=ignore-duplicates,return=minimal",
-      },
-      body: JSON.stringify({ email, source }),
-    }
-  );
+  // Plain insert, NOT an upsert: PostgREST's on_conflict/ignore-duplicates
+  // path is rejected by RLS on tables with no select policy (verified live
+  // 2026-07-07 — 42501 even with an insert policy). A duplicate email comes
+  // back as 409/23505 instead, which is a success as far as the user knows.
+  const res = await fetch(`${c.env.SUPABASE_URL}/rest/v1/waitlist`, {
+    method: "POST",
+    headers: {
+      apikey: c.env.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${c.env.SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      // no select policy on waitlist → must not ask for the row back
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({ email, source }),
+  });
+  if (res.status === 409) return c.redirect(`${c.env.SITE_ORIGIN}/thanks`);
   if (!res.ok) {
     console.error(`waitlist insert failed: ${res.status} ${await res.text()}`);
     return c.redirect(`${c.env.SITE_ORIGIN}/?waitlist=error#waitlist`);

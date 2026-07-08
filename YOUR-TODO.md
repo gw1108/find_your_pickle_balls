@@ -37,42 +37,42 @@ verified** 2026-07-07 — the worker is live at
 `https://pickup-worker.pickupsports.workers.dev`. One owner-gated step
 remains:
 
-### 0e-3. Create the website Worker (git-connected, ~15 min)
+### 0e-3. Finish the waitlist round trip (~2 min)
 
-Cloudflare now steers new sites to **Workers with static assets** instead
-of Pages (Pages is legacy). `apps/web/wrangler.toml` is already set up as
-an assets-only Worker named `pickup-web` — the dashboard just needs to be
-connected to the repo:
+The website Worker is **live and verified** (2026-07-07) at
+`https://find-your-pickle-balls.pickupsports.workers.dev` — git-connected,
+rebuilds on every push to `main`, `PUBLIC_WAITLIST_ENDPOINT` baked in
+correctly. But live testing found two bugs in `pickup-worker`, now fixed
+in code and blocked only on a production deploy (agent-denied):
 
-1. https://dash.cloudflare.com → **Workers & Pages** → **Create
-   application** → **Workers** tab → **Connect to Git** (a.k.a. "Import a
-   repository") → pick `gw1108/find_your_pickle_balls`.
-2. Build settings (the screen with "Deploy command"):
-   - Project/Worker name: `pickup-web`
-   - Build command: `pnpm --filter web build`
-   - Deploy command: `npx wrangler deploy --config apps/web/wrangler.toml`
-   - Non-production branch deploy command (Advanced):
-     `npx wrangler versions upload --config apps/web/wrangler.toml`
-   - Path / Root directory: leave `/` (monorepo root, so pnpm sees the
-     workspace — the `--config` flag points wrangler at the web app)
-3. **Build-time environment variable** (in the same build settings, or
-   later under Settings → Build → Variables — it must be a *build*
-   variable, Astro inlines it at build time):
-   - `PUBLIC_WAITLIST_ENDPOINT` =
-     `https://pickup-worker.pickupsports.workers.dev/waitlist`.
-     Without it the form posts to a relative `/waitlist`, which only works
-     once the real domain routes site + worker on one zone.
-   - If you already deployed once before adding the variable, trigger a
-     rebuild (Deployments → Retry / push a commit) so it gets baked in.
-4. Deploy → you get `https://pickup-web.pickupsports.workers.dev`. Submit
-   the waitlist form with a real email → should land on `/thanks` and the
-   row should appear in the Supabase `waitlist` table.
+- the waitlist insert always failed (PostgREST `on_conflict` upserts are
+  rejected by RLS when the table has no select policy → plain insert now,
+  409 duplicate = success), and
+- every redirect pointed at the unregistered `pickupsports.app`
+  (`SITE_ORIGIN` now temporarily points at the live site URL).
+
+1. Deploy the fixed worker (uses your cached Cloudflare login):
+
+   ```sh
+   cd C:\GameDev\find_your_pickle_balls
+   npx wrangler deploy --config apps/worker/wrangler.toml
+   ```
+
+2. Then tell Claude — it will re-verify the round trip from the agent
+   shell (POST → 302 to `/thanks`, duplicate → `/thanks`) and delete this
+   section. Optionally also submit the form in a browser with your real
+   email for a human-eyes check.
+3. Cleanup whenever: Supabase Dashboard → SQL editor →
+   `delete from waitlist where email like 'agent-verify-%@example.com';`
+   (test rows from live verification; more will accumulate from re-runs).
 
 **When you buy the real domain** (item 3 below): add a custom domain to
-the `pickup-web` Worker, add `pickup-worker` routes for
-`pickupsports.app/e/*`, `/admin*` and `/waitlist*` (then
-`PUBLIC_WAITLIST_ENDPOINT` can go away), and tell Claude if the name
-isn't `pickupsports.app` so it can search-replace.
+the `find-your-pickle-balls` Worker (rename it to something nicer like
+`pickup-web` in its dashboard Settings first, if you care — then tell
+Claude so `apps/web/wrangler.toml` stays in sync), add `pickup-worker`
+routes for `pickupsports.app/e/*`, `/admin*` and `/waitlist*` (then
+`PUBLIC_WAITLIST_ENDPOINT` can go away), and restore `SITE_ORIGIN` in
+`apps/worker/wrangler.toml` to the real domain (grep for `TODO(domain)`).
 
 ### 0e-4. Deep-link placeholders (whenever the values exist — no rush)
 
@@ -232,6 +232,42 @@ anyone can sign up with a fake email. Before ambassadors/beta testers:
 
 - [ ] Email confirmation re-enabled
 - [ ] Custom SMTP configured
+
+---
+
+## 2b. Lock down the Firebase Android API key (~10 min, console)
+
+GitHub secret-scanning alert #1 flagged `AIzaSy…O6FIU` in
+`apps/mobile/google-services.json` (project `pickupsports-61c29`, package
+`app.pickupsports.mobile`). This is a **Firebase Android client key** — it
+ships inside the APK by design and is *not* a secret, so no rotation / git
+history scrub is needed. BUT: from the agent shell it currently probes as
+**unrestricted** — server-side requests with no Android package/cert
+headers passed Google's key gateway (reached the backend, got
+`CONFIGURATION_NOT_FOUND`, not an app-blocked 403). It should be locked to
+the app. Do these in the console, then tell Claude to add the gitleaks
+allowlist entry and dismiss the GitHub alert:
+
+1. **Restrict the key to the Android app.**
+   https://console.cloud.google.com/apis/credentials?project=pickupsports-61c29
+   → click the Android key → **Application restrictions** → **Android
+   apps** → add package `app.pickupsports.mobile` + the app's SHA-1
+   fingerprint (debug and release). Get SHA-1 via
+   `cd apps/mobile/android && ./gradlew signingReport` (or from the Play
+   Console app-signing page for the release cert).
+2. **Restrict the key to only the APIs you use** (same page → **API
+   restrictions** → Restrict key → select Identity Toolkit / Firebase
+   Installations / whatever the app actually calls).
+3. **Enable App Check** (this is the real data-access guard, not the key):
+   https://console.firebase.google.com/project/pickupsports-61c29/appcheck
+   → register the Android app with **Play Integrity** → then **enforce**
+   App Check on Firebase Auth + any Firestore/RTDB/Storage/Functions the
+   app uses.
+
+- [ ] Android app + SHA-1 restriction added to the key
+- [ ] API restrictions set on the key
+- [ ] App Check registered and enforced
+- [ ] Told Claude to add gitleaks allowlist + dismiss GitHub alert #1
 
 ---
 

@@ -9,6 +9,10 @@ compatibility_date = "2026-06-01"
 # token-gated /admin moderation queue (§8).
 
 [vars]
-SITE_ORIGIN = "https://pickupsports.app"
+# TODO(domain): restore "https://pickupsports.app" (or the real name) once
+# the domain is bought — until then redirects must land on the deployed
+# site, not an unregistered zone. (Side effect while temporary: /e/* og:url
+# points at the site origin instead of this worker — fine for previews.)
+SITE_ORIGIN = "https://find-your-pickle-balls.pickupsports.workers.dev"
 SUPABASE_URL = "https://myqkjecfuqqjiknzqtbi.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15cWtqZWNmdXFxamlrbnpxdGJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMDA0MjksImV4cCI6MjA5ODg3NjQyOX0.nwFcEKPaLRUFb5sjoSrob2mkpFQOI-kSKC89A7GAWag"

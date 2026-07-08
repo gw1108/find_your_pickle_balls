@@ -1,4 +1,7 @@
-name = "pickup-web"
+# Name matches what the git-connected dashboard project created (it
+# overrides this field on its own builds; keeping them equal means a manual
+# `wrangler deploy` updates the same Worker instead of minting a second one).
+name = "find-your-pickle-balls"
 compatibility_date = "2026-07-07"
 
 # Static-assets-only Worker (no `main`) — serves the built Astro site.
