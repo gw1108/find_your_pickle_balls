@@ -478,6 +478,51 @@ duplicate → `/thanks`, invalid → `/?waitlist=invalid#waitlist`, and the
 row lands in `waitlist` (201). Remaining owner steps: deep-link
 placeholders (0e-4), iOS milestone (0d), waitlist test-row cleanup (0e).
 
+### Phase 4 status (2026-07-07) — polish pass 1: the accumulated bug list, cleared
+
+The six polish items carried in the Phase 1–3 status blocks are fixed;
+typecheck + lint clean. Verified on the single-emulator rig (fresh event
+"Evening" at the Shoal Beach pickleball court):
+
+- **Chat blank under keyboard** (Phase 1 note): RN's
+  `automaticallyAdjustKeyboardInsets` applies the inset to the wrong edge of
+  an *inverted* FlatList — replaced with a Reanimated spacer
+  (`useReanimatedKeyboardAnimation`) as the inverted list's
+  `ListHeaderComponent` (renders at the visual bottom), minus `insets.bottom`
+  to match the composer's StickyView offset. **Rig-verified**: messages sit
+  directly above the composer with the keyboard open.
+- **"Player" placeholder on broadcast messages** (Phase 1 note):
+  `mergeMessages` now resolves a missing `sender` from any already-loaded
+  message by the same `sender_id` (broadcast payloads carry no profile join).
+  First-ever message from a sender still back-fills via the head refetch —
+  by design. Code-verified (typecheck); needs the two-emulator rig for a
+  live pass, batch with the next chat session.
+- **Pin tap contention at low zoom** (Phase 2 note): idle venue dots only
+  render at zoom ≥ 13 (`VENUE_DOTS_MIN_ZOOM`); live venues always render.
+  Also declutters the metro view. **Rig-verified**: no dots downtown at
+  zoom 12, live 🟢 pin still renders; `onRegionDidChange` delivers numeric
+  zoom (checked via debug log). Dots-at-14 not visually confirmed — adb
+  can't produce a double-tap-zoom gesture; follows from the verified parts.
+- **Check-in re-offer after check-out** (Phase 2 note): 15-min prompt
+  cooldown (`CHECKOUT_PROMPT_COOLDOWN_MS`) starts on any checked-in → null
+  transition (voluntary or TTL); the checked-in venue also joins the
+  session's prompted set. **Rig-verified** at Shoal Beach, whose pickleball
+  and basketball courts are 49m apart — the exact pair from the original
+  report: check-in → check-out → no re-prompt.
+- **First-launch prompt swallowed** (Phase 2 note): the geofence Alert now
+  awaits `pushRegistrationSettled()` (exposed from notifications.ts) so it
+  can't render under the OS notification-permission dialog. Granted-path
+  rig-verified (prompt still fires); the true first-launch race needs a
+  wiped install — spot-check during the next fresh-account session.
+- **Dead push tokens** (Phase 2 finding): `notify-message` now parses Expo
+  tickets and deletes `push_tokens` rows on `DeviceNotRegistered`
+  (ticket-level; receipt polling stays a §4.4-style upgrade if ever needed).
+  Deploy is owner-gated → YOUR-TODO 0f.
+
+Remaining Phase 4 scope: the broader Nomad-complaint pass (perf, badges,
+navigation feel), ambassador beta, store submissions (§10 gates), and the
+0d iOS milestone still waiting on Apple.
+
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 
 ---

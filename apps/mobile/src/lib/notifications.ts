@@ -20,10 +20,27 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// In-flight registration — other UI (the geofence check-in Alert) awaits this
+// so it never races the OS notification-permission dialog on first launch.
+let registration: Promise<void> | null = null;
+
+/** Resolves once any push registration (and its permission dialog) settles.
+ * If registration hasn't started yet, waits briefly for it to kick off —
+ * the root layout fires it right after sign-in/onboarding. */
+export async function pushRegistrationSettled(): Promise<void> {
+  if (!registration) await new Promise((r) => setTimeout(r, 1500));
+  await (registration ?? Promise.resolve());
+}
+
 /** Register for push and store the token. Safe to call on every sign-in;
  * quietly no-ops where push can't work (emulator without FCM, denied
  * permission) so the dev loop never breaks on it. */
-export async function registerForPush(userId: string): Promise<void> {
+export function registerForPush(userId: string): Promise<void> {
+  registration = doRegisterForPush(userId);
+  return registration;
+}
+
+async function doRegisterForPush(userId: string): Promise<void> {
   try {
     if (!Device.isDevice && Platform.OS === "ios") return; // no push on iOS sim
 

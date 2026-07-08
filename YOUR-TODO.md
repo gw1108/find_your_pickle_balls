@@ -31,6 +31,23 @@ the PLAN.md §12 status blocks for the history.
 
 ---
 
+## 0f. Deploy the push-token-pruning fix (~1 min)
+
+Phase 4 polish gave `notify-message` ticket parsing: Expo `DeviceNotRegistered`
+tickets now delete the dead row from `push_tokens` (previously the fan-out
+grew unbounded — PLAN.md Phase 2 finding). Code is committed and
+typechecked; the production deploy is agent-denied. One command:
+
+```sh
+cd C:\GameDev\find_your_pickle_balls
+pnpm dlx supabase functions deploy notify-message
+```
+
+- [ ] `notify-message` redeployed (then tell Claude — it will re-run a
+  push send on the rig to confirm nothing regressed)
+
+---
+
 ## 2b. Lock down the Firebase Android API key (~10 min, console)
 
 GitHub secret-scanning alert #1 flagged `AIzaSy…O6FIU` in

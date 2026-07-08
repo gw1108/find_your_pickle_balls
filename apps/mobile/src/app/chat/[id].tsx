@@ -10,9 +10,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
-// edge-to-edge-safe composer handling (SDK 57 Android): the list uses RN's
-// automatic keyboard insets; the composer rides the keyboard via StickyView
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
+// edge-to-edge-safe keyboard handling (SDK 57 Android): the composer rides
+// the keyboard via StickyView; the list clears it with an animated spacer at
+// its visual bottom (RN's automaticallyAdjustKeyboardInsets applies the inset
+// to the wrong edge on an inverted list and blanks it while the keyboard is up)
+import {
+  KeyboardStickyView,
+  useReanimatedKeyboardAnimation,
+} from 'react-native-keyboard-controller';
+import Reanimated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { errorMessage , formatMessageTime } from '@/lib/format';
@@ -53,13 +59,28 @@ export default function ChatScreen() {
   const [sending, setSending] = useState(false);
   const endReached = useRef(false);
 
+  // keyboard height (animated, negative while opening) → spacer under the
+  // newest messages; minus insets.bottom because the composer's StickyView
+  // offset already reclaims the nav-bar padding the keyboard covers
+  const { height: kbHeight } = useReanimatedKeyboardAnimation();
+  const keyboardSpacer = useAnimatedStyle(() => ({
+    height: Math.max(0, Math.abs(kbHeight.value) - insets.bottom),
+  }));
+
   // Upsert: broadcast rows replace optimistic/stale copies by id. Broadcast
-  // payloads carry no profile join — keep a previously-known sender.
+  // payloads carry no profile join — reuse a sender already known from any
+  // earlier message by the same author (else "Player" flashes until refetch).
   const mergeMessages = useCallback((incoming: MessageWithSender[]) => {
     setMessages((cur) => {
       const known = new Map(cur.map((m) => [m.id, m]));
+      const senders = new Map(
+        cur.filter((m) => m.sender).map((m) => [m.sender_id, m.sender])
+      );
       for (const m of incoming) {
-        known.set(m.id, { ...m, sender: m.sender ?? known.get(m.id)?.sender ?? null });
+        known.set(m.id, {
+          ...m,
+          sender: m.sender ?? known.get(m.id)?.sender ?? senders.get(m.sender_id) ?? null,
+        });
       }
       return [...known.values()].sort(
         (a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)
@@ -266,7 +287,8 @@ export default function ChatScreen() {
         contentContainerStyle={styles.list}
         onEndReached={loadOlder}
         onEndReachedThreshold={0.4}
-        automaticallyAdjustKeyboardInsets
+        // inverted list: the header renders at the visual bottom
+        ListHeaderComponent={<Reanimated.View style={keyboardSpacer} />}
       />
       {/* translates with the keyboard (edge-to-edge safe); opened offset
           returns the nav-bar padding the keyboard already covers */}

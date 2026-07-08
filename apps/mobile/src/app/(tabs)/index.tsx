@@ -18,6 +18,7 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { CHECKIN_PROMPT_RADIUS_M, distanceMeters } from '@/lib/geo';
+import { pushRegistrationSettled } from '@/lib/notifications';
 import {
   checkIn,
   fetchEventsNear,
@@ -34,6 +35,16 @@ const MAP_STYLE_URL =
 
 /** Launch metro fallback until location permission resolves (PLAN.md §11). */
 const AUSTIN: LatLng = { lat: 30.2672, lng: -97.7431 };
+
+/** Idle venue dots only render from neighborhood zoom in — at metro zoom they
+ * are unreadable clutter and their Markers steal taps from event pins (both
+ * are native overlay views with no hit-test priority). Live venues always show. */
+const VENUE_DOTS_MIN_ZOOM = 13;
+
+/** After a check-out (voluntary or TTL expiry), don't re-offer a check-in —
+ * courts cluster within the 75m geofence and the prompt would immediately
+ * re-offer the venue next door. */
+const CHECKOUT_PROMPT_COOLDOWN_MS = 15 * 60 * 1000;
 
 export default function MapScreen() {
   const theme = useTheme();
@@ -53,8 +64,23 @@ export default function MapScreen() {
   const [sport, setSport] = useState<Sport | null>(null);
   const [skill, setSkill] = useState<SkillLevel | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(11);
   // venues we already offered a check-in for this session (§6.1 prompt)
   const promptedVenues = useRef<Set<string>>(new Set());
+  const promptCooldownUntil = useRef(0);
+  const prevCheckin = useRef<MyCheckin | null>(null);
+
+  // check-in lifecycle → prompt suppression: never re-offer the venue we're
+  // (or were) checked into, and cool the prompt off entirely after a check-out
+  useEffect(() => {
+    const prev = prevCheckin.current;
+    prevCheckin.current = myCheckin;
+    if (myCheckin) {
+      promptedVenues.current.add(myCheckin.venue_id);
+    } else if (prev) {
+      promptCooldownUntil.current = Date.now() + CHECKOUT_PROMPT_COOLDOWN_MS;
+    }
+  }, [myCheckin]);
 
   // one-shot: center on the user if they allow it
   useEffect(() => {
@@ -130,6 +156,7 @@ export default function MapScreen() {
   // location read — never from background tracking
   useEffect(() => {
     if (!myLocation || myCheckin || venues.length === 0) return;
+    if (Date.now() < promptCooldownUntil.current) return;
     const nearest = venues.find(
       (v) =>
         distanceMeters(myLocation, { lat: v.lat, lng: v.lng }) <= CHECKIN_PROMPT_RADIUS_M &&
@@ -139,24 +166,29 @@ export default function MapScreen() {
     promptedVenues.current.add(nearest.id);
     const sportHere =
       (profile?.sports ?? []).find((s) => nearest.sports.includes(s)) ?? nearest.sports[0];
-    Alert.alert(
-      `At ${nearest.name}?`,
-      `Check in so nearby players can see ${SPORT_LABEL[sportHere].toLowerCase()} is on. Auto-expires in 2 hours.`,
-      [
-        { text: 'Not now', style: 'cancel' },
-        {
-          text: 'Check in',
-          onPress: async () => {
-            try {
-              await checkIn(nearest.id, sportHere, myLocation);
-              load();
-            } catch (e) {
-              Alert.alert('Could not check in', errorMessage(e));
-            }
+    (async () => {
+      // first launch: the OS notification-permission dialog may be up (push
+      // registration) — an Alert shown under it gets swallowed. Wait it out.
+      await pushRegistrationSettled();
+      Alert.alert(
+        `At ${nearest.name}?`,
+        `Check in so nearby players can see ${SPORT_LABEL[sportHere].toLowerCase()} is on. Auto-expires in 2 hours.`,
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Check in',
+            onPress: async () => {
+              try {
+                await checkIn(nearest.id, sportHere, myLocation);
+                load();
+              } catch (e) {
+                Alert.alert('Could not check in', errorMessage(e));
+              }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    })();
   }, [myLocation, myCheckin, venues, profile, load]);
 
   return (
@@ -184,38 +216,42 @@ export default function MapScreen() {
           mapStyle={MAP_STYLE_URL}
           attributionPosition={{ bottom: 8, left: 8 }}
           onRegionDidChange={(e) => {
-            const { userInteraction, center: c } = e.nativeEvent;
+            const { userInteraction, center: c, zoom: z } = e.nativeEvent;
+            setZoom(z);
             if (userInteraction) setCenter({ lat: c[1], lng: c[0] });
           }}>
           <Camera
             ref={cameraRef}
             initialViewState={{ center: [center.lng, center.lat], zoom: 11 }}
           />
-          {/* venue layer under event pins; live venues glow green (§6.1) */}
-          {venues.map((v) => (
-            <Marker
-              key={v.id}
-              id={v.id}
-              lngLat={[v.lng, v.lat]}
-              onPress={() => setSelectedVenue(v)}>
-              {v.live_count > 0 ? (
-                <View style={[styles.venuePinLive, { backgroundColor: theme.background }]}>
-                  <ThemedText type="small">🟢</ThemedText>
-                  <ThemedText type="smallBold">{v.live_count}</ThemedText>
-                </View>
-              ) : (
-                <View
-                  style={[
-                    styles.venuePin,
-                    {
-                      backgroundColor: theme.backgroundElement,
-                      borderColor: theme.textSecondary,
-                    },
-                  ]}
-                />
-              )}
-            </Marker>
-          ))}
+          {/* venue layer under event pins; live venues glow green (§6.1);
+              idle dots hide below VENUE_DOTS_MIN_ZOOM (declutter + tap priority) */}
+          {venues
+            .filter((v) => v.live_count > 0 || zoom >= VENUE_DOTS_MIN_ZOOM)
+            .map((v) => (
+              <Marker
+                key={v.id}
+                id={v.id}
+                lngLat={[v.lng, v.lat]}
+                onPress={() => setSelectedVenue(v)}>
+                {v.live_count > 0 ? (
+                  <View style={[styles.venuePinLive, { backgroundColor: theme.background }]}>
+                    <ThemedText type="small">🟢</ThemedText>
+                    <ThemedText type="smallBold">{v.live_count}</ThemedText>
+                  </View>
+                ) : (
+                  <View
+                    style={[
+                      styles.venuePin,
+                      {
+                        backgroundColor: theme.backgroundElement,
+                        borderColor: theme.textSecondary,
+                      },
+                    ]}
+                  />
+                )}
+              </Marker>
+            ))}
           {events.map((ev) => (
             <Marker
               key={ev.id}

@@ -86,16 +86,35 @@ Deno.serve(async (req) => {
     channelId: "chat", // Android notification channel (set up in the app)
   }));
 
+  // Expo tickets come back index-aligned with the request chunk; a
+  // DeviceNotRegistered ticket means the token is permanently dead (app
+  // uninstalled / token rotated) — prune it so the fan-out doesn't grow
+  // unbounded. (Receipts can also report it later; ticket-level pruning
+  // covers the common case without storing ticket ids.)
   let sent = 0;
+  const deadTokens: string[] = [];
   for (let i = 0; i < notifications.length; i += CHUNK) {
+    const chunk = notifications.slice(i, i + CHUNK);
     const res = await fetch(EXPO_PUSH_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(notifications.slice(i, i + CHUNK)),
+      body: JSON.stringify(chunk),
     });
-    if (res.ok) sent += notifications.slice(i, i + CHUNK).length;
+    if (!res.ok) continue;
+    const tickets = (await res.json().catch(() => null)) as {
+      data?: { status: string; details?: { error?: string } }[];
+    } | null;
+    tickets?.data?.forEach((ticket, idx) => {
+      if (ticket.status === "ok") sent += 1;
+      else if (ticket.details?.error === "DeviceNotRegistered") {
+        deadTokens.push(chunk[idx].to);
+      }
+    });
   }
-  return json({ sent });
+  if (deadTokens.length > 0) {
+    await admin.from("push_tokens").delete().in("token", deadTokens);
+  }
+  return json({ sent, pruned: deadTokens.length });
 });
 
 function json(body: unknown, status = 200): Response {
