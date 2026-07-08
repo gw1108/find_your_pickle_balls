@@ -24,41 +24,46 @@ agent shell.
   "whenever" items last), and keep section labels stable — PLAN.md and past
   status blocks reference them (0a, 0b, …).
 
-Everything through Phase 2 (migrations, venue layer, push notifications,
-Edge Functions) is done and has been deleted per the rules above — see the
-PLAN.md §12 status blocks for the history.
+Everything through Phase 3's website deploys (migrations, venue layer,
+push notifications, Edge Functions, the `pickup-worker` + the live
+marketing site) is done and has been deleted per the rules above — see
+the PLAN.md §12 status blocks for the history.
 
 ---
 
-## 0e. Phase 3 deploys — website
+## 2b. Lock down the Firebase Android API key (~10 min, console)
 
-0e-1 (waitlist migration), 0e-2 (worker deploy + secrets), and 0e-3
-(website Worker + waitlist round trip) are all **done and verified**
-2026-07-07: the site is live at
-`https://find-your-pickle-balls.pickupsports.workers.dev` (git-connected,
-rebuilds on every push to `main`) and the waitlist form round-trips into
-Supabase. Only "whenever" items remain:
+GitHub secret-scanning alert #1 flagged `AIzaSy…O6FIU` in
+`apps/mobile/google-services.json` (project `pickupsports-61c29`, package
+`app.pickupsports.mobile`). This is a **Firebase Android client key** — it
+ships inside the APK by design and is *not* a secret, so no rotation / git
+history scrub is needed. BUT: from the agent shell it currently probes as
+**unrestricted** — server-side requests with no Android package/cert
+headers passed Google's key gateway (reached the backend, got
+`CONFIGURATION_NOT_FOUND`, not an app-blocked 403). It should be locked to
+the app. Do these in the console, then tell Claude to add the gitleaks
+allowlist entry and dismiss the GitHub alert:
 
-- [ ] Cleanup whenever: Supabase Dashboard → SQL editor →
-  `delete from waitlist where email like 'agent-verify-%@example.com';`
-  (test rows from Claude's live round-trip verification).
+1. **Restrict the key to the Android app.**
+   https://console.cloud.google.com/apis/credentials?project=pickupsports-61c29
+   → click the Android key → **Application restrictions** → **Android
+   apps** → add package `app.pickupsports.mobile` + the app's SHA-1
+   fingerprint (debug and release). Get SHA-1 via
+   `cd apps/mobile/android && ./gradlew signingReport` (or from the Play
+   Console app-signing page for the release cert).
+2. **Restrict the key to only the APIs you use** (same page → **API
+   restrictions** → Restrict key → select Identity Toolkit / Firebase
+   Installations / whatever the app actually calls).
+3. **Enable App Check** (this is the real data-access guard, not the key):
+   https://console.firebase.google.com/project/pickupsports-61c29/appcheck
+   → register the Android app with **Play Integrity** → then **enforce**
+   App Check on Firebase Auth + any Firestore/RTDB/Storage/Functions the
+   app uses.
 
-### 0e-4. Deep-link placeholders (whenever the values exist — no rush)
-
-Universal links stay dormant until these three placeholders get real
-values; the app + site work fine without them:
-
-- [ ] `apps/web/public/.well-known/apple-app-site-association`: replace
-  `TEAMID` with your Apple Team ID (visible at
-  https://developer.apple.com/account → Membership details, once the
-  enrollment activates).
-- [ ] `apps/web/public/.well-known/assetlinks.json`: replace the SHA-256
-  placeholder — after the first production Android build run
-  `npx eas-cli credentials` (Android → production → Keystore) and copy the
-  **SHA256 Fingerprint**, or later use Play Console's App Signing page.
-- [ ] `apps/worker/src/index.ts` + `apps/web/src/layouts/Base.astro`:
-  swap the commented `apple-itunes-app` meta (`app-id=TODO`) for the real
-  App Store id once the app is listed.
+- [ ] Android app + SHA-1 restriction added to the key
+- [ ] API restrictions set on the key
+- [ ] App Check registered and enforced
+- [ ] Told Claude to add gitleaks allowlist + dismiss GitHub alert #1
 
 ---
 
@@ -202,39 +207,35 @@ anyone can sign up with a fake email. Before ambassadors/beta testers:
 
 ---
 
-## 2b. Lock down the Firebase Android API key (~10 min, console)
+## 0e. Phase 3 website — deployed; leftovers (whenever)
 
-GitHub secret-scanning alert #1 flagged `AIzaSy…O6FIU` in
-`apps/mobile/google-services.json` (project `pickupsports-61c29`, package
-`app.pickupsports.mobile`). This is a **Firebase Android client key** — it
-ships inside the APK by design and is *not* a secret, so no rotation / git
-history scrub is needed. BUT: from the agent shell it currently probes as
-**unrestricted** — server-side requests with no Android package/cert
-headers passed Google's key gateway (reached the backend, got
-`CONFIGURATION_NOT_FOUND`, not an app-blocked 403). It should be locked to
-the app. Do these in the console, then tell Claude to add the gitleaks
-allowlist entry and dismiss the GitHub alert:
+0e-1 (waitlist migration), 0e-2 (worker deploy + secrets), and 0e-3
+(website Worker + waitlist round trip) are all **done and verified**
+2026-07-07: the site is live at
+`https://find-your-pickle-balls.pickupsports.workers.dev` (git-connected,
+rebuilds on every push to `main`) and the waitlist form round-trips into
+Supabase. Only "whenever" items remain:
 
-1. **Restrict the key to the Android app.**
-   https://console.cloud.google.com/apis/credentials?project=pickupsports-61c29
-   → click the Android key → **Application restrictions** → **Android
-   apps** → add package `app.pickupsports.mobile` + the app's SHA-1
-   fingerprint (debug and release). Get SHA-1 via
-   `cd apps/mobile/android && ./gradlew signingReport` (or from the Play
-   Console app-signing page for the release cert).
-2. **Restrict the key to only the APIs you use** (same page → **API
-   restrictions** → Restrict key → select Identity Toolkit / Firebase
-   Installations / whatever the app actually calls).
-3. **Enable App Check** (this is the real data-access guard, not the key):
-   https://console.firebase.google.com/project/pickupsports-61c29/appcheck
-   → register the Android app with **Play Integrity** → then **enforce**
-   App Check on Firebase Auth + any Firestore/RTDB/Storage/Functions the
-   app uses.
+- [ ] Cleanup whenever: Supabase Dashboard → SQL editor →
+  `delete from waitlist where email like 'agent-verify-%@example.com';`
+  (test rows from Claude's live round-trip verification).
 
-- [ ] Android app + SHA-1 restriction added to the key
-- [ ] API restrictions set on the key
-- [ ] App Check registered and enforced
-- [ ] Told Claude to add gitleaks allowlist + dismiss GitHub alert #1
+### 0e-4. Deep-link placeholders (whenever the values exist — no rush)
+
+Universal links stay dormant until these three placeholders get real
+values; the app + site work fine without them:
+
+- [ ] `apps/web/public/.well-known/apple-app-site-association`: replace
+  `TEAMID` with your Apple Team ID (visible at
+  https://developer.apple.com/account → Membership details, once the
+  enrollment activates).
+- [ ] `apps/web/public/.well-known/assetlinks.json`: replace the SHA-256
+  placeholder — after the first production Android build run
+  `npx eas-cli credentials` (Android → production → Keystore) and copy the
+  **SHA256 Fingerprint**, or later use Play Console's App Signing page.
+- [ ] `apps/worker/src/index.ts` + `apps/web/src/layouts/Base.astro`:
+  swap the commented `apple-itunes-app` meta (`app-id=TODO`) for the real
+  App Store id once the app is listed.
 
 ---
 
