@@ -456,6 +456,28 @@ admin-auth hole — with `ADMIN_TOKEN` unset, `isAdmin` compared
 when the secret is missing (fix deployed by the owner). Remaining owner
 steps: Pages site (0e-3), deep-link placeholders (0e-4), iOS milestone (0d).
 
+**Deploy update (2026-07-07, evening): 0e-3 done — Phase 3 deploys complete.**
+The site shipped as a git-connected **Workers static assets** deploy, not
+Pages (Cloudflare now steers new projects to Workers; Pages is legacy):
+Worker `find-your-pickle-balls` at
+`https://find-your-pickle-balls.pickupsports.workers.dev`, rebuilding on
+every push to `main` (build `pnpm --filter web build`, deploy
+`npx wrangler deploy --config apps/web/wrangler.toml`,
+`PUBLIC_WAITLIST_ENDPOINT` as a dashboard build variable; assets-only
+`apps/web/wrangler.toml`, no `main`). `_headers` works on Workers static
+assets too — both `.well-known` files serve as `application/json`. Live
+round-trip testing caught two bugs, both fixed + redeployed (worker deploy
+by owner): (1) the PostgREST upsert (`on_conflict` +
+`ignore-duplicates`) is rejected by RLS on tables with no select policy —
+despite the with-check-true insert policy — so `/waitlist` now does a plain
+insert and treats 409/duplicate as success; (2) `SITE_ORIGIN` pointed at
+the unregistered `pickupsports.app`, stranding every redirect — it
+temporarily points at the live site URL (`TODO(domain)` in
+`apps/worker/wrangler.toml`). Verified live: new email → 302 `/thanks`,
+duplicate → `/thanks`, invalid → `/?waitlist=invalid#waitlist`, and the
+row lands in `waitlist` (201). Remaining owner steps: deep-link
+placeholders (0e-4), iOS milestone (0d), waitlist test-row cleanup (0e).
+
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 
 ---

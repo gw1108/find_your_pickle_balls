@@ -30,49 +30,18 @@ PLAN.md §12 status blocks for the history.
 
 ---
 
-## 0e. Phase 3 deploys — website (~15 min left)
+## 0e. Phase 3 deploys — website
 
-0e-1 (waitlist migration) and 0e-2 (worker deploy + secrets) are **done and
-verified** 2026-07-07 — the worker is live at
-`https://pickup-worker.pickupsports.workers.dev`. One owner-gated step
-remains:
+0e-1 (waitlist migration), 0e-2 (worker deploy + secrets), and 0e-3
+(website Worker + waitlist round trip) are all **done and verified**
+2026-07-07: the site is live at
+`https://find-your-pickle-balls.pickupsports.workers.dev` (git-connected,
+rebuilds on every push to `main`) and the waitlist form round-trips into
+Supabase. Only "whenever" items remain:
 
-### 0e-3. Finish the waitlist round trip (~2 min)
-
-The website Worker is **live and verified** (2026-07-07) at
-`https://find-your-pickle-balls.pickupsports.workers.dev` — git-connected,
-rebuilds on every push to `main`, `PUBLIC_WAITLIST_ENDPOINT` baked in
-correctly. But live testing found two bugs in `pickup-worker`, now fixed
-in code and blocked only on a production deploy (agent-denied):
-
-- the waitlist insert always failed (PostgREST `on_conflict` upserts are
-  rejected by RLS when the table has no select policy → plain insert now,
-  409 duplicate = success), and
-- every redirect pointed at the unregistered `pickupsports.app`
-  (`SITE_ORIGIN` now temporarily points at the live site URL).
-
-1. Deploy the fixed worker (uses your cached Cloudflare login):
-
-   ```sh
-   cd C:\GameDev\find_your_pickle_balls
-   npx wrangler deploy --config apps/worker/wrangler.toml
-   ```
-
-2. Then tell Claude — it will re-verify the round trip from the agent
-   shell (POST → 302 to `/thanks`, duplicate → `/thanks`) and delete this
-   section. Optionally also submit the form in a browser with your real
-   email for a human-eyes check.
-3. Cleanup whenever: Supabase Dashboard → SQL editor →
-   `delete from waitlist where email like 'agent-verify-%@example.com';`
-   (test rows from live verification; more will accumulate from re-runs).
-
-**When you buy the real domain** (item 3 below): add a custom domain to
-the `find-your-pickle-balls` Worker (rename it to something nicer like
-`pickup-web` in its dashboard Settings first, if you care — then tell
-Claude so `apps/web/wrangler.toml` stays in sync), add `pickup-worker`
-routes for `pickupsports.app/e/*`, `/admin*` and `/waitlist*` (then
-`PUBLIC_WAITLIST_ENDPOINT` can go away), and restore `SITE_ORIGIN` in
-`apps/worker/wrangler.toml` to the real domain (grep for `TODO(domain)`).
+- [ ] Cleanup whenever: Supabase Dashboard → SQL editor →
+  `delete from waitlist where email like 'agent-verify-%@example.com';`
+  (test rows from Claude's live round-trip verification).
 
 ### 0e-4. Deep-link placeholders (whenever the values exist — no rush)
 
@@ -90,8 +59,6 @@ values; the app + site work fine without them:
 - [ ] `apps/worker/src/index.ts` + `apps/web/src/layouts/Base.astro`:
   swap the commented `apple-itunes-app` meta (`app-id=TODO`) for the real
   App Store id once the app is listed.
-
-- [ ] 0e-3 website Worker live, waitlist form round-trips
 
 ---
 
@@ -282,5 +249,10 @@ allowlist entry and dismiss the GitHub alert:
   org account using the LLC's D-U-N-S number — nothing to redo now.)
 - [ ] **Domain** — `pickupsports.app` is a placeholder in the code; buy
   the real domain (or tell Claude the actual name to search-replace)
-  before the website or deep links go live. Also unblocks SMTP (item 2)
-  and the 0e-3 note about routing the worker on the real zone.
+  before deep links or SMTP (item 2) go live. Then: add a custom domain
+  to the `find-your-pickle-balls` Worker (rename it to something nicer
+  like `pickup-web` in its dashboard Settings first if you care — tell
+  Claude so `apps/web/wrangler.toml` stays in sync), add `pickup-worker`
+  routes for `<domain>/e/*`, `/admin*` and `/waitlist*` (then the
+  `PUBLIC_WAITLIST_ENDPOINT` build variable can go away), and restore
+  `SITE_ORIGIN` in `apps/worker/wrangler.toml` (grep for `TODO(domain)`).
