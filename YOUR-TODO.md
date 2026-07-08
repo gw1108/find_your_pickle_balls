@@ -37,29 +37,42 @@ verified** 2026-07-07 — the worker is live at
 `https://pickup-worker.pickupsports.workers.dev`. One owner-gated step
 remains:
 
-### 0e-3. Create the Cloudflare Pages site (~15 min)
+### 0e-3. Create the website Worker (git-connected, ~15 min)
 
-1. https://dash.cloudflare.com → **Workers & Pages** → **Create** →
-   **Pages** → **Connect to Git** → pick this repo (push it to GitHub
-   first if it isn't yet — ask Claude to set the remote up if needed).
-2. Build settings:
-   - Framework preset: **Astro**
+Cloudflare now steers new sites to **Workers with static assets** instead
+of Pages (Pages is legacy). `apps/web/wrangler.toml` is already set up as
+an assets-only Worker named `pickup-web` — the dashboard just needs to be
+connected to the repo:
+
+1. https://dash.cloudflare.com → **Workers & Pages** → **Create
+   application** → **Workers** tab → **Connect to Git** (a.k.a. "Import a
+   repository") → pick `gw1108/find_your_pickle_balls`.
+2. Build settings (the screen with "Deploy command"):
+   - Project/Worker name: `pickup-web`
    - Build command: `pnpm --filter web build`
-   - Build output directory: `apps/web/dist`
-   - Root directory: leave `/` (the monorepo root, so pnpm sees the workspace)
-3. **Environment variable** (Settings → Environment variables):
+   - Deploy command: `npx wrangler deploy --config apps/web/wrangler.toml`
+   - Non-production branch deploy command (Advanced):
+     `npx wrangler versions upload --config apps/web/wrangler.toml`
+   - Path / Root directory: leave `/` (monorepo root, so pnpm sees the
+     workspace — the `--config` flag points wrangler at the web app)
+3. **Build-time environment variable** (in the same build settings, or
+   later under Settings → Build → Variables — it must be a *build*
+   variable, Astro inlines it at build time):
    - `PUBLIC_WAITLIST_ENDPOINT` =
      `https://pickup-worker.pickupsports.workers.dev/waitlist`.
      Without it the form posts to a relative `/waitlist`, which only works
      once the real domain routes site + worker on one zone.
-4. Deploy → you get `https://<project>.pages.dev`. Submit the waitlist
-   form with a real email → should land on `/thanks` and the row should
-   appear in the Supabase `waitlist` table.
+   - If you already deployed once before adding the variable, trigger a
+     rebuild (Deployments → Retry / push a commit) so it gets baked in.
+4. Deploy → you get `https://pickup-web.pickupsports.workers.dev`. Submit
+   the waitlist form with a real email → should land on `/thanks` and the
+   row should appear in the Supabase `waitlist` table.
 
-**When you buy the real domain** (item 3 below): point it at the Pages
-project, add worker routes for `pickupsports.app/e/*`, `/admin*` and
-`/waitlist*` (then `PUBLIC_WAITLIST_ENDPOINT` can go away), and tell
-Claude if the name isn't `pickupsports.app` so it can search-replace.
+**When you buy the real domain** (item 3 below): add a custom domain to
+the `pickup-web` Worker, add `pickup-worker` routes for
+`pickupsports.app/e/*`, `/admin*` and `/waitlist*` (then
+`PUBLIC_WAITLIST_ENDPOINT` can go away), and tell Claude if the name
+isn't `pickupsports.app` so it can search-replace.
 
 ### 0e-4. Deep-link placeholders (whenever the values exist — no rush)
 
@@ -78,7 +91,7 @@ values; the app + site work fine without them:
   swap the commented `apple-itunes-app` meta (`app-id=TODO`) for the real
   App Store id once the app is listed.
 
-- [ ] 0e-3 Pages site live, waitlist form round-trips
+- [ ] 0e-3 website Worker live, waitlist form round-trips
 
 ---
 

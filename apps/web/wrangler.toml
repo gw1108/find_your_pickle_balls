@@ -1,0 +1,10 @@
+name = "pickup-web"
+compatibility_date = "2026-07-07"
+
+# Static-assets-only Worker (no `main`) — serves the built Astro site.
+# Deployed via git-connected Workers Builds; deploy command runs at the
+# repo root, so it passes --config apps/web/wrangler.toml. Paths below
+# resolve relative to THIS file.
+
+[assets]
+directory = "./dist"

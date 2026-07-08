@@ -133,6 +133,9 @@ importers:
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
+      wrangler:
+        specifier: ^4.20.0
+        version: 4.107.0(@cloudflare/workers-types@4.20260702.1)
 
   apps/worker:
     dependencies:
