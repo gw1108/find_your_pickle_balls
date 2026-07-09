@@ -10,14 +10,27 @@ import { Platform } from "react-native";
 import { savePushToken } from "@/lib/queries";
 import { supabase } from "@/lib/supabase";
 
+// The thread the user is currently reading — its own pushes are pure noise
+// (the message is already on screen), so the handler drops them.
+let activeChannelId: string | null = null;
+
+/** Chat screen marks itself active on mount, null on unmount. */
+export function setActiveChatChannel(channelId: string | null): void {
+  activeChannelId = channelId;
+}
+
 // foreground messages: banner only — unread state lives in the DB, not here
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const channelId = notification.request.content.data?.channelId;
+    const suppress = typeof channelId === "string" && channelId === activeChannelId;
+    return {
+      shouldShowBanner: !suppress,
+      shouldShowList: !suppress,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 // In-flight registration — other UI (the geofence check-in Alert) awaits this

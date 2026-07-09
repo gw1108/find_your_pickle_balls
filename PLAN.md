@@ -519,9 +519,41 @@ typecheck + lint clean. Verified on the single-emulator rig (fresh event
   (ticket-level; receipt polling stays a §4.4-style upgrade if ever needed).
   Deploy is owner-gated → YOUR-TODO 0f.
 
-Remaining Phase 4 scope: the broader Nomad-complaint pass (perf, badges,
-navigation feel), ambassador beta, store submissions (§10 gates), and the
-0d iOS milestone still waiting on Apple.
+### Phase 4 status (2026-07-09) — polish pass 2: verifications + UX friction
+
+The two verifications deferred from pass 1 both passed on the rig, and the
+pass fixed four new UX/polish items; typecheck + lint clean. Verified on the
+two-emulator rig (fresh event "Polish pass 2" at Shoal Beach, new fresh-install
+account "Player C"):
+
+- **Sender-name fix rig-verified** (pass 1 item): broadcast-delivered
+  messages render the real sender name immediately in both directions —
+  no "Player" placeholder (screenshots ~1s after each send).
+- **First-launch prompt race rig-verified** (pass 1 item): on a wiped
+  install + fresh sign-up at the courts, the geofence check-in Alert
+  appeared *after* the OS notification-permission dialog settled instead
+  of being swallowed under it.
+- **New: check-in chain-prompt fix** — the prompt-cooldown now also starts
+  when a prompt is shown/declined (was: only on check-out). Found live:
+  declining the pickleball-court prompt immediately stacked the
+  basketball-court prompt on top (Shoal Beach's courts are 49m apart, both
+  inside the 75m geofence).
+- **New: chat send flicker** — the optimistic bubble was removed before the
+  head refetch resolved, blinking the message out for a network round-trip;
+  now the real row is fetched first and swapped in one batch. Rig-verified.
+- **New: one-tap join latency** — join waited for a full event-detail
+  refetch before pushing the chat screen; it now navigates as soon as the
+  channel id is known (§2 sub-10s wedge) and refreshes behind. Rig-verified:
+  fresh account joined and landed in the chat instantly.
+- **New: same-thread push suppression** — the notification handler drops a
+  push whose `channelId` matches the thread currently on screen (the message
+  is already visible; the banner was pure noise / Nomad badge-complaint
+  territory).
+- **New: pull-to-refresh** on the Chats inbox and the map's list view.
+
+Remaining Phase 4 scope: the broader Nomad-complaint pass (perf profiling,
+navigation feel — no known bugs left on the list), ambassador beta, store
+submissions (§10 gates), and the 0d iOS milestone still waiting on Apple.
 
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 

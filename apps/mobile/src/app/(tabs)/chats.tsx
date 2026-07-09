@@ -15,6 +15,19 @@ export default function ChatsScreen() {
   const router = useRouter();
   const { channels, refresh } = useUnread();
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const pullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refresh]);
 
   useFocusEffect(
     useCallback(() => {
@@ -39,6 +52,8 @@ export default function ChatsScreen() {
           data={channels}
           keyExtractor={(c) => c.channel_id}
           contentContainerStyle={styles.list}
+          refreshing={refreshing}
+          onRefresh={pullRefresh}
           renderItem={({ item }) => (
             <Pressable
               accessibilityRole="button"

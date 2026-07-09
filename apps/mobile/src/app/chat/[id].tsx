@@ -27,7 +27,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
-import { notifyMessageSent } from '@/lib/notifications';
+import { notifyMessageSent, setActiveChatChannel } from '@/lib/notifications';
 import {
   blockUser,
   deleteMessage,
@@ -87,6 +87,12 @@ export default function ChatScreen() {
       );
     });
   }, []);
+
+  // this thread's own pushes are suppressed while it's on screen
+  useEffect(() => {
+    setActiveChatChannel(channelId);
+    return () => setActiveChatChannel(null);
+  }, [channelId]);
 
   // initial page + header info + read stamp
   useEffect(() => {
@@ -170,9 +176,12 @@ export default function ChatScreen() {
     try {
       const messageId = await sendMessage(channelId, userId, content);
       notifyMessageSent(messageId); // push fan-out (§5) — fire-and-forget
+      // fetch the real row BEFORE dropping the optimistic one — both state
+      // updates then land in one batch, so the message never blinks out
+      // while waiting on the network (broadcast may or may not echo first)
+      const head = await fetchMessages(channelId, undefined, 5);
       setMessages((cur) => cur.filter((m) => m.id !== optimisticId));
-      // pick up our own row (broadcast may or may not echo before this)
-      mergeMessages(await fetchMessages(channelId, undefined, 5));
+      mergeMessages(head);
     } catch (e) {
       setMessages((cur) => cur.filter((m) => m.id !== optimisticId));
       setDraft(content);

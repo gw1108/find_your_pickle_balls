@@ -43,6 +43,8 @@ export default function EventScreen() {
     }
   }, [id]);
 
+  // inline .then() instead of load(): react-hooks/set-state-in-effect can't
+  // see through the async callback and flags the direct call
   useEffect(() => {
     let cancelled = false;
     fetchEventDetail(id)
@@ -85,7 +87,9 @@ export default function EventScreen() {
     setBusy(true);
     try {
       const channelId = await joinEvent(event.id, userId);
-      await load();
+      // straight into the chat (§2: open-app → in-the-chat in under 10s) —
+      // the detail refreshes behind the pushed screen, not in front of it
+      load();
       if (channelId) {
         router.push({ pathname: '/chat/[id]', params: { id: channelId } });
       }

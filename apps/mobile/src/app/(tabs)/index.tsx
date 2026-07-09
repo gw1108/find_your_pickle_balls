@@ -41,10 +41,10 @@ const AUSTIN: LatLng = { lat: 30.2672, lng: -97.7431 };
  * are native overlay views with no hit-test priority). Live venues always show. */
 const VENUE_DOTS_MIN_ZOOM = 13;
 
-/** After a check-out (voluntary or TTL expiry), don't re-offer a check-in —
- * courts cluster within the 75m geofence and the prompt would immediately
- * re-offer the venue next door. */
-const CHECKOUT_PROMPT_COOLDOWN_MS = 15 * 60 * 1000;
+/** After a check-in prompt (shown or declined) or a check-out (voluntary or
+ * TTL expiry), don't offer another one for a while — courts cluster within
+ * the 75m geofence and the venue next door would prompt immediately. */
+const PROMPT_COOLDOWN_MS = 15 * 60 * 1000;
 
 export default function MapScreen() {
   const theme = useTheme();
@@ -65,6 +65,7 @@ export default function MapScreen() {
   const [skill, setSkill] = useState<SkillLevel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(11);
+  const [refreshing, setRefreshing] = useState(false);
   // venues we already offered a check-in for this session (§6.1 prompt)
   const promptedVenues = useRef<Set<string>>(new Set());
   const promptCooldownUntil = useRef(0);
@@ -78,7 +79,7 @@ export default function MapScreen() {
     if (myCheckin) {
       promptedVenues.current.add(myCheckin.venue_id);
     } else if (prev) {
-      promptCooldownUntil.current = Date.now() + CHECKOUT_PROMPT_COOLDOWN_MS;
+      promptCooldownUntil.current = Date.now() + PROMPT_COOLDOWN_MS;
     }
   }, [myCheckin]);
 
@@ -164,6 +165,10 @@ export default function MapScreen() {
     );
     if (!nearest) return;
     promptedVenues.current.add(nearest.id);
+    // one prompt per cooldown window, total: clustered courts (Shoal Beach's
+    // pickleball + basketball are 49m apart) otherwise chain-prompt — decline
+    // one and the neighbor's Alert is already stacking on top of it
+    promptCooldownUntil.current = Date.now() + PROMPT_COOLDOWN_MS;
     const sportHere =
       (profile?.sports ?? []).find((s) => nearest.sports.includes(s)) ?? nearest.sports[0];
     (async () => {
@@ -198,6 +203,15 @@ export default function MapScreen() {
           data={events}
           keyExtractor={(e) => e.id}
           contentContainerStyle={[styles.list, { paddingTop: insets.top + Spacing.six }]}
+          refreshing={refreshing}
+          onRefresh={async () => {
+            setRefreshing(true);
+            try {
+              await load();
+            } finally {
+              setRefreshing(false);
+            }
+          }}
           renderItem={({ item }) => (
             <EventCard
               event={item}
