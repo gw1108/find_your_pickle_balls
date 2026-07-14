@@ -8,7 +8,6 @@
     "scheme": "pickup",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
       "bundleIdentifier": "app.pickupsports.mobile",
       "associatedDomains": ["applinks:pickupsports.app"],
       "infoPlist": {

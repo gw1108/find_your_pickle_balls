@@ -48,51 +48,15 @@ pnpm dlx supabase functions deploy notify-message
 
 ---
 
-## 2b. Lock down the Firebase Android API key (~10 min, console)
+## 0d. iOS milestone (§9.1) — UNBLOCKED, ready to run
 
-GitHub secret-scanning alert #1 flagged `AIzaSy…O6FIU` in
-`apps/mobile/google-services.json` (project `pickupsports-61c29`, package
-`app.pickupsports.mobile`). This is a **Firebase Android client key** — it
-ships inside the APK by design and is *not* a secret, so no rotation / git
-history scrub is needed. BUT: from the agent shell it currently probes as
-**unrestricted** — server-side requests with no Android package/cert
-headers passed Google's key gateway (reached the backend, got
-`CONFIGURATION_NOT_FOUND`, not an app-blocked 403). It should be locked to
-the app. Do these in the console, then tell Claude to add the gitleaks
-allowlist entry and dismiss the GitHub alert:
-
-1. **Restrict the key to the Android app.**
-   https://console.cloud.google.com/apis/credentials?project=pickupsports-61c29
-   → click the Android key → **Application restrictions** → **Android
-   apps** → add package `app.pickupsports.mobile` + the app's SHA-1
-   fingerprint (debug and release). Get SHA-1 via
-   `cd apps/mobile/android && ./gradlew signingReport` (or from the Play
-   Console app-signing page for the release cert).
-2. **Restrict the key to only the APIs you use** (same page → **API
-   restrictions** → Restrict key → select Identity Toolkit / Firebase
-   Installations / whatever the app actually calls).
-3. **Enable App Check** (this is the real data-access guard, not the key):
-   https://console.firebase.google.com/project/pickupsports-61c29/appcheck
-   → register the Android app with **Play Integrity** → then **enforce**
-   App Check on Firebase Auth + any Firestore/RTDB/Storage/Functions the
-   app uses.
-
-- [ ] Android app + SHA-1 restriction added to the key
-- [ ] API restrictions set on the key
-- [ ] App Check registered and enforced
-- [ ] Told Claude to add gitleaks allowlist + dismiss GitHub alert #1
-
----
-
-## 0d. iOS milestone (§9.1) — waiting on Apple
-
-**Blocked 2026-07-07:** the Apple Developer Program enrollment payment is
-still pending (EAS failed with "no team associated with your Apple
-account" — that resolves itself when Apple activates the membership).
-
-- [ ] **Wait for the "Welcome to the Apple Developer Program" email**,
-  then run the steps below (they pick up where the failed attempt left
-  off — your Apple session is cached, no 2FA again).
+**Unblocked 2026-07-13:** Apple Developer membership is active (Team ID
+`NL489DLC24`). Claude preflighted the build the same day: EAS CLI is logged
+in as `gw1108` (owner of `gw1108s-team`), `expo-doctor` passes 20/20 after
+aligning five package versions to SDK 57 expectations, the monorepo
+typechecks, and the AASA file is live with the Team ID
+(`https://find-your-pickle-balls.pickupsports.workers.dev/.well-known/apple-app-site-association`,
+serves as `application/json`).
 
 Goal: the first iOS build of the app, on your physical iPhone, with a
 human pass over the checklist. Per PLAN.md the route is an EAS cloud
@@ -142,9 +106,9 @@ npx eas-cli submit --platform ios --latest
    with the same Apple ID.
 2. On a browser: https://appstoreconnect.apple.com → **Apps** →
    **Pickup** → **TestFlight** tab.
-3. If it flags "Missing Compliance" on the build: click **Manage** →
-   the app **does** use encryption (HTTPS only) → select "standard
-   encryption / exempt" → Save.
+3. The "Missing Compliance" flag should **not** appear —
+   `ITSAppUsesNonExemptEncryption: false` is already set in app.json. If
+   it shows up anyway: **Manage** → standard/exempt encryption → Save.
 4. Under **Internal Testing** click **+** to create a group (name it
    anything), then **Add Testers** → add your own Apple ID.
 5. The build appears in the TestFlight app on your phone within minutes
@@ -177,6 +141,42 @@ per §9.1 rather than interrupting the Android loop.
 
 - [ ] Build submitted and installed via TestFlight
 - [ ] Checklist run; failures noted
+
+---
+
+## 2b. Lock down the Firebase Android API key (~10 min, console)
+
+GitHub secret-scanning alert #1 flagged `AIzaSy…O6FIU` in
+`apps/mobile/google-services.json` (project `pickupsports-61c29`, package
+`app.pickupsports.mobile`). This is a **Firebase Android client key** — it
+ships inside the APK by design and is *not* a secret, so no rotation / git
+history scrub is needed. BUT: from the agent shell it currently probes as
+**unrestricted** — server-side requests with no Android package/cert
+headers passed Google's key gateway (reached the backend, got
+`CONFIGURATION_NOT_FOUND`, not an app-blocked 403). It should be locked to
+the app. Do these in the console, then tell Claude to add the gitleaks
+allowlist entry and dismiss the GitHub alert:
+
+1. **Restrict the key to the Android app.**
+   https://console.cloud.google.com/apis/credentials?project=pickupsports-61c29
+   → click the Android key → **Application restrictions** → **Android
+   apps** → add package `app.pickupsports.mobile` + the app's SHA-1
+   fingerprint (debug and release). Get SHA-1 via
+   `cd apps/mobile/android && ./gradlew signingReport` (or from the Play
+   Console app-signing page for the release cert).
+2. **Restrict the key to only the APIs you use** (same page → **API
+   restrictions** → Restrict key → select Identity Toolkit / Firebase
+   Installations / whatever the app actually calls).
+3. **Enable App Check** (this is the real data-access guard, not the key):
+   https://console.firebase.google.com/project/pickupsports-61c29/appcheck
+   → register the Android app with **Play Integrity** → then **enforce**
+   App Check on Firebase Auth + any Firestore/RTDB/Storage/Functions the
+   app uses.
+
+- [ ] Android app + SHA-1 restriction added to the key
+- [ ] API restrictions set on the key
+- [ ] App Check registered and enforced
+- [ ] Told Claude to add gitleaks allowlist + dismiss GitHub alert #1
 
 ---
 
