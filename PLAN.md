@@ -437,9 +437,10 @@ What shipped / was verified:
 - **Owner queue (YOUR-TODO 0e)**: push waitlist migration → `wrangler deploy`
   + secrets (0c) → Cloudflare Pages project with `PUBLIC_WAITLIST_ENDPOINT`.
   Universal-link placeholders (Apple TEAMID, Play signing SHA-256, App Store
-  id) stay dormant until those values exist (0e-4). **iOS TestFlight
-  milestone (0d) still waits on Apple Developer enrollment activation** —
-  it rides with this phase per §12 but is independent of the website work.
+  id) stay dormant until those values exist (0e-4) — Apple Team ID filled in
+  2026-07-13 (`NL489DLC24`, enrollment activated); Play SHA-256 and App Store
+  id still pending. **iOS TestFlight milestone (0d) is now unblocked** — it
+  rides with this phase per §12 but is independent of the website work.
 - Rig note for the daily loop: "Cannot find native module X" after an
   emulator boot = the snapshot restored a stale APK — fix is
   `adb install -r apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`

@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["TEAMID.app.pickupsports.mobile"],
+        "appIDs": ["NL489DLC24.app.pickupsports.mobile"],
         "components": [
           { "/": "/e/*", "comment": "Event invite links open in-app" }
         ]

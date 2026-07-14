@@ -242,10 +242,9 @@ Supabase. Only "whenever" items remain:
 Universal links stay dormant until these three placeholders get real
 values; the app + site work fine without them:
 
-- [ ] `apps/web/public/.well-known/apple-app-site-association`: replace
-  `TEAMID` with your Apple Team ID (visible at
-  https://developer.apple.com/account → Membership details, once the
-  enrollment activates).
+- [x] `apps/web/public/.well-known/apple-app-site-association`: replace
+  `TEAMID` with your Apple Team ID — done 2026-07-13 (Team ID
+  `NL489DLC24`, membership activated).
 - [ ] `apps/web/public/.well-known/assetlinks.json`: replace the SHA-256
   placeholder — after the first production Android build run
   `npx eas-cli credentials` (Android → production → Keystore) and copy the
