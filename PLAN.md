@@ -556,6 +556,44 @@ Remaining Phase 4 scope: the broader Nomad-complaint pass (perf profiling,
 navigation feel — no known bugs left on the list), ambassador beta, store
 submissions (§10 gates), and the 0d iOS milestone still waiting on Apple.
 
+### Phase 4 status (2026-07-13) — pass 3: Apple unblock, SDK alignment, rebrand
+
+Apple Developer membership activated (Team `NL489DLC24`): AASA `appIDs`
+filled in and verified live (`application/json`, correct team+bundle), 0d
+preflighted end-to-end (EAS CLI logged in as `gw1108`, expo-doctor 20/20,
+typecheck clean) and rewritten in YOUR-TODO as ready-to-run. Work done and
+rig-verified this pass (fresh `expo prebuild -p android` + `assembleDebug`,
+two-court GPS fix at Shoal Beach):
+
+- **SDK 57 version alignment** (`expo install --fix`): expo/expo-router/
+  expo-linking/@expo/ui to expected patches and
+  `react-native-keyboard-controller` 1.21.13 → Expo's pinned 1.21.9 (a
+  *native* downgrade — was the main regression risk). Verified: chat
+  keyboard spacer still correct (messages sit on the composer, keyboard
+  open), send has no flicker, history + sender names render.
+- **Rebrand off the Expo template** (was: Expo "A" logo as app icon,
+  splash, and in-app splash overlay). New mark: white map pin with
+  pickleball holes on the brand blue gradient (SVG source in the render
+  script; assets via sharp). Regenerated `icon.png`, `splash-icon.png`,
+  the Android adaptive set, favicon; dropped the `ios.icon` .icon-composer
+  dir (plain PNG is the reliable path for the first TestFlight build);
+  animated splash overlay now renders the mark. Rig-verified: launcher
+  icon, native splash → animated overlay, no template art anywhere.
+- **Regression spot-checks still green:** chain-prompt cooldown (decline
+  basketball → no stacked pickleball prompt), venue-dot declutter at low
+  zoom, tab navigation, Chats inbox.
+- **Perf profiling scoped out of the rig:** SwiftShader software GL +
+  dev-mode Metro bundles make emulator numbers meaningless (MapLibre draws
+  outside HWUI — gfxinfo reports 0 frames; dev cold start is dominated by
+  the bundle fetch). Real perf/navigation-feel data comes from the 0d
+  TestFlight checklist on the physical iPhone and ambassador-beta Androids;
+  revisit only if those surface complaints.
+- Rig gotchas learned: the first Metro bundle after a `pnpm install` can
+  take 10–15 min (cache invalidated; black screen is *waiting*, not hung —
+  watch for `Android Bundled` in the metro log), and gradle needs
+  `JAVA_HOME` = Android Studio's `jbr` from an agent shell; stop gradle
+  daemons before driving the emulator (RAM pressure).
+
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 
 ---
