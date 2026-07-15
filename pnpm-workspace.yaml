@@ -9,7 +9,12 @@ packages:
 nodeLinker: hoisted
 allowBuilds:
   esbuild: true
-  sharp: true
+  # astro/miniflare dep; ships prebuilt binaries (@img/sharp-*) as optional deps.
+  # Its install script is `check.js || npm run build`, and check.js exits 1 on any
+  # host with a global libvips — which the EAS macOS builders have via Homebrew.
+  # That fallback source build needs node-addon-api, only sharp's own devDep, so
+  # it fails the install. Windows never hits this: check.js short-circuits there.
+  sharp: false
   # eslint dep; ships prebuilt binaries, postinstall is only a fallback
   unrs-resolver: false
   workerd: true

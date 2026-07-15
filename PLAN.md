@@ -594,6 +594,31 @@ two-court GPS fix at Shoal Beach):
   `JAVA_HOME` = Android Studio's `jbr` from an agent shell; stop gradle
   daemons before driving the emulator (RAM pressure).
 
+### Phase 4 status (2026-07-14) — 0f deployed: push pruning live, rig re-verified
+
+Owner deployed the `notify-message` token-pruning build (YOUR-TODO 0f,
+section since deleted per its rules). Rig re-verification end-to-end:
+message inserted as Player B via PostgREST → function invoked with B's JWT
+→ `{"sent":2}` → FCM banner on the backgrounded dev build ("Sunset /
+Player: Post-redeploy push check", `chat` channel) → tap deep-linked into
+the Sunset thread. Auth rejection, block filtering, and recipient math all
+exercised by the same path. Two findings:
+
+- **Bug (open): sign-out never removes the device push token.**
+  `removePushToken()` exists in queries.ts but has no caller. Consequences
+  on a shared device: (1) the signed-out account keeps receiving that
+  device's pushes (privacy); (2) the next account's `savePushToken` upsert
+  hits the token-PK row owned by the previous user and RLS rejects the
+  UPDATE (42501, swallowed by the best-effort catch), so the new account
+  silently never registers. Hit live on the rig switching phase3-smoke →
+  pushtest; unblocked by deleting the stale row as its owner. Fix shape:
+  call `removePushToken(token)` before `supabase.auth.signOut()` (needs the
+  current token cached), or make `savePushToken` delete-then-insert.
+- Receipt-level `DeviceNotRegistered` (dead FCM binding behind a live-looking
+  Expo ticket) is invisible to the new ticket-level pruning — tickets came
+  back `ok` for a token the receipts endpoint then reported dead. Known
+  §4.4-style upgrade, just now observed in the wild.
+
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 
 ---
