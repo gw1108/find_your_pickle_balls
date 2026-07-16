@@ -18,7 +18,3 @@ allowBuilds:
   # eslint dep; ships prebuilt binaries, postinstall is only a fallback
   unrs-resolver: false
   workerd: true
-minimumReleaseAgeExclude:
-  - expo-dev-client@57.0.6
-  - expo-dev-launcher@57.0.6
-  - expo-dev-menu@57.0.6
