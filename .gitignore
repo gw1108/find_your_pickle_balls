@@ -16,6 +16,7 @@ apps/worker/.wrangler/
 .env
 .env.*
 !.env.example
+secrets/
 .dev.vars
 .dev.vars.*
 supabase/.temp/
