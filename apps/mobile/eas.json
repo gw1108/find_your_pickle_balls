@@ -21,7 +21,12 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://myqkjecfuqqjiknzqtbi.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15cWtqZWNmdXFxamlrbnpxdGJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMDA0MjksImV4cCI6MjA5ODg3NjQyOX0.nwFcEKPaLRUFb5sjoSrob2mkpFQOI-kSKC89A7GAWag",
+        "EXPO_PUBLIC_MAP_STYLE_URL": "https://tiles.stadiamaps.com/styles/outdoors.json?api_key=72213e31-a6dd-4e7d-8d49-6dfa2fd3a5c3"
+      }
     }
   },
   "submit": {

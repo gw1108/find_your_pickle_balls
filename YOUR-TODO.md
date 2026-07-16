@@ -31,57 +31,17 @@ the PLAN.md §12 status blocks for the history.
 
 ---
 
-## 0d. iOS milestone (§9.1) — UNBLOCKED, ready to run
+## 0d. iOS milestone (§9.1) — build 5 submitted; install + run the checklist
 
-**Unblocked 2026-07-13:** Apple Developer membership is active (Team ID
-`NL489DLC24`). Claude preflighted the build the same day: EAS CLI is logged
-in as `gw1108` (owner of `gw1108s-team`), `expo-doctor` passes 20/20 after
-aligning five package versions to SDK 57 expectations, the monorepo
-typechecks, and the AASA file is live with the Team ID
-(`https://find-your-pickle-balls.pickupsports.workers.dev/.well-known/apple-app-site-association`,
-serves as `application/json`).
-
-Goal: the first iOS build of the app, on your physical iPhone, with a
-human pass over the checklist. Per PLAN.md the route is an EAS cloud
-build → TestFlight. Expect ~30–60 min of elapsed time, most of it
-waiting on Apple.
-
-### 0d-1. Kick off the iOS build
-
-```sh
-cd C:\GameDev\find_your_pickle_balls\apps\mobile
-npx eas-cli build --platform ios --profile production
-```
-
-First-run prompts, in the order they appear:
-
-1. **"Do you want to log in to your Apple account?"** → Yes → sign in
-   with the Apple ID from your Apple Developer enrollment (2026-07-06).
-   Approve the 2FA prompt on your iPhone.
-2. **Bundle identifier** — it will register `app.pickupsports.mobile`
-   on the Apple Developer portal. Accept.
-3. **"Generate a new Apple Distribution Certificate?"** → Yes (EAS
-   creates and stores it for you).
-4. **"Generate a new Apple Provisioning Profile?"** → Yes.
-5. **Push Notifications key (APNs)** — if it asks to set one up → **Yes**
-   (this is the iOS equivalent of the FCM key you already did; EAS
-   manages the key). If it doesn't ask, fix it afterwards with
-   `npx eas-cli credentials` → iOS → Push Notifications → set up.
-6. The build queues in the cloud (~15–25 min). You can watch the link it
-   prints, or just wait for the terminal to finish. This uses 1 of your
-   15 free iOS builds this month.
-
-### 0d-2. Submit the build to TestFlight
-
-```sh
-npx eas-cli submit --platform ios --latest
-```
-
-1. It asks to log into App Store Connect — same Apple ID.
-2. **"No App Store Connect app found — create one?"** → Yes.
-   - Name: `Pickup` (placeholder is fine, it's not public until release)
-   - Language: English (U.S.), SKU: accept the default.
-3. Wait for "Submitted". Then Apple processes the binary for ~5–30 min.
+**Build 5 is good.** The build-4 launch crash was missing `EXPO_PUBLIC_*`
+env vars in the EAS cloud build (`.env` is gitignored, so it never reached
+the build servers, and `src/lib/supabase.ts` throws at startup without
+`EXPO_PUBLIC_SUPABASE_URL`). You added the `env` block to `eas.json`'s
+production profile, rebuilt, and submitted. Claude verified 2026-07-15 by
+downloading build 5's IPA and grepping `main.jsbundle`: all three values
+(Supabase URL, anon key, Stadia map style) are inlined, `CFBundleVersion` is
+`5`. The crash cause is gone — 0d-0/0d-1/0d-2 are done and deleted per the
+rules above. Your remaining steps:
 
 ### 0d-3. Install on your iPhone
 
@@ -102,6 +62,11 @@ npx eas-cli submit --platform ios --latest
 Sign in with the dev email/password account (Sign in with Apple isn't
 wired yet — that's expected; note anything *else* that's broken):
 
+- [ ] **Continue with Google** works — you enabled the Google provider and
+      Claude confirmed it live 2026-07-15 (`google:true` from Supabase's
+      `/auth/v1/settings`), but the OAuth round trip has never been tested
+      on a real device. The dev email/password form is the fallback if it
+      fails; note the error rather than getting stuck.
 - [ ] Map renders with venue + event pins; pan/zoom/rotate gestures feel right
 - [ ] Sport/skill filters and the list toggle work
 - [ ] One-tap join an event → lands in the group chat; send a message
@@ -122,7 +87,7 @@ wired yet — that's expected; note anything *else* that's broken):
 File anything broken as a note to Claude — iOS-specific bugs batch here
 per §9.1 rather than interrupting the Android loop.
 
-- [ ] Build submitted and installed via TestFlight
+- [ ] Build 5 installed via TestFlight and launches without crashing
 - [ ] Checklist run; failures noted
 
 ---
@@ -160,32 +125,6 @@ allowlist entry and dismiss the GitHub alert:
 - [ ] API restrictions set on the key
 - [ ] App Check registered and enforced
 - [ ] Told Claude to add gitleaks allowlist + dismiss GitHub alert #1
-
----
-
-## 1. Whenever you want Google login (~20 min)
-
-Until then, the dev email/password form on the sign-in screen covers all
-local testing — this is not a blocker for anything.
-
-1. Google Cloud Console → https://console.cloud.google.com →
-   **APIs & Services** → **Credentials** (create/select any project —
-   using the same project as Firebase keeps things tidy).
-2. **Create credentials** → **OAuth client ID**.
-   - If prompted to configure the consent screen first: User type
-     **External**, app name `Pickup`, your email for the contact fields,
-     scopes: none needed beyond default, test users: your own email →
-     Save.
-3. Application type: **Web application** (yes, web — Supabase handles
-   the mobile handoff).
-4. Under **Authorized redirect URIs** add exactly:
-   `https://myqkjecfuqqjiknzqtbi.supabase.co/auth/v1/callback`
-5. Create → copy the **Client ID** and **Client secret**.
-6. Supabase Dashboard → **Authentication** → **Sign In / Providers** →
-   **Google** → toggle **Enable**, paste Client ID + Secret → **Save**.
-7. Test: "Continue with Google" button on the app's sign-in screen.
-
-- [ ] Google provider enabled and tested
 
 ---
 
@@ -247,6 +186,15 @@ values; the app + site work fine without them:
   name/address off the store listings and skip Google's 12-tester gate.
   (Your individual Apple Developer account from 2026-07-06 converts to an
   org account using the LLC's D-U-N-S number — nothing to redo now.)
+- [ ] **App Store name** — "Pickup" was already taken on App Store
+  Connect, so the app is listed there as the placeholder **"Pickup
+  (668053)"**. Before the first *public* App Store release, pick a real
+  name: appstoreconnect.apple.com → My Apps → the app → **App
+  Information** → **Name**. Non-blocking until then — TestFlight testers
+  see the display name from `apps/mobile/app.json`, not this listing
+  name. If the new name differs from "Pickup", tell Claude so the
+  in-app branding (`app.json` `name`, website copy) gets updated to
+  match.
 - [ ] **Domain** — `pickupsports.app` is a placeholder in the code; buy
   the real domain (or tell Claude the actual name to search-replace)
   before deep links or SMTP (item 2) go live. Then: add a custom domain
