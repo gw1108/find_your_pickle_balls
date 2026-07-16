@@ -31,30 +31,6 @@ the PLAN.md §12 status blocks for the history.
 
 ---
 
-## 0f. Push the moderation_keywords RLS fix (2 min — do this first)
-
-Supabase's security linter flagged `moderation_keywords` as publicly
-accessible (`rls_disabled_in_public`): migration 20260706000005 created it
-without enabling RLS, and Claude confirmed live 2026-07-15 that the anon
-key can read it (and with default grants, could also insert/delete —
-i.e. anyone with the app's public key could gut the keyword filter).
-
-Migration `20260715000001_moderation_keywords_rls.sql` is written and
-committed: it enables RLS (no policies — no client reads this table; the
-`security definer` trigger functions bypass RLS so the filter keeps
-working) and revokes anon/authenticated grants. Push it:
-
-```
-cd C:\GameDev\find_your_pickle_balls
-supabase db push
-```
-
-- [ ] `supabase db push` run; then tell Claude to verify (re-probe with
-      the anon key — should return an empty list or permission error —
-      and confirm the dashboard advisory clears)
-
----
-
 ## 0d. iOS milestone (§9.1) — build 5 submitted; install + run the checklist
 
 **Build 5 is good.** The build-4 launch crash was missing `EXPO_PUBLIC_*`
