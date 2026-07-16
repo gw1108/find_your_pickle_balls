@@ -43,6 +43,26 @@ downloading build 5's IPA and grepping `main.jsbundle`: all three values
 `5`. The crash cause is gone — 0d-0/0d-1/0d-2 are done and deleted per the
 rules above. Your remaining steps:
 
+### 0d-5. Fix Google sign-in redirect (2 dashboard fields, ~2 min)
+
+You hit this on the iPhone 2026-07-15: after the Google consent screen,
+Safari lands on an unopenable `localhost` page. Cause: the app asks
+Supabase to redirect back to `pickup://auth-callback`, but that URL isn't
+on the project's redirect allowlist, so Supabase falls back to its
+**Site URL** — still the default `http://localhost:3000`. (Google → Supabase
+worked fine; it's the final Supabase → app hop that's misconfigured.)
+
+1. https://supabase.com/dashboard/project/myqkjecfuqqjiknzqtbi/auth/url-configuration
+2. **Site URL**: replace `http://localhost:3000` with
+   `https://find-your-pickle-balls.pickupsports.workers.dev` (any real
+   fallback beats localhost; swap for the real domain later per item 3).
+3. **Redirect URLs** → **Add URL** → `pickup://auth-callback` → Save.
+4. Retry **Continue with Google** on the iPhone (no rebuild needed —
+   this is all server-side).
+
+- [ ] Site URL + redirect allowlist updated
+- [ ] Google sign-in lands back in the app
+
 ### 0d-3. Install on your iPhone
 
 1. On the iPhone: install **TestFlight** from the App Store, sign in
@@ -62,11 +82,9 @@ rules above. Your remaining steps:
 Sign in with the dev email/password account (Sign in with Apple isn't
 wired yet — that's expected; note anything *else* that's broken):
 
-- [ ] **Continue with Google** works — you enabled the Google provider and
-      Claude confirmed it live 2026-07-15 (`google:true` from Supabase's
-      `/auth/v1/settings`), but the OAuth round trip has never been tested
-      on a real device. The dev email/password form is the fallback if it
-      fails; note the error rather than getting stuck.
+- [ ] **Continue with Google** works — first attempt 2026-07-15 dead-ended
+      on `localhost` in Safari; fix is 0d-5 above (redirect allowlist),
+      then retest.
 - [ ] Map renders with venue + event pins; pan/zoom/rotate gestures feel right
 - [ ] Sport/skill filters and the list toggle work
 - [ ] One-tap join an event → lands in the group chat; send a message
