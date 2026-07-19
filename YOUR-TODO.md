@@ -82,13 +82,14 @@ worked fine; it's the final Supabase → app hop that's misconfigured.)
 Sign in with the dev email/password account (Sign in with Apple isn't
 wired yet — that's expected; note anything *else* that's broken):
 
-- [ ] **Continue with Google** works — first attempt 2026-07-15 dead-ended
+- [X] **Continue with Google** works — first attempt 2026-07-15 dead-ended
       on `localhost` in Safari; fix is 0d-5 above (redirect allowlist),
       then retest.
-- [ ] Map renders with venue + event pins; pan/zoom/rotate gestures feel right
-- [ ] Sport/skill filters and the list toggle work
+- [X] Map renders with venue + event pins; pan/zoom/rotate gestures feel right
+- [X] Sport/skill filters and the list toggle work
 - [ ] One-tap join an event → lands in the group chat; send a message
 - [ ] Chat cold-open: force-quit the app, reopen straight into a thread
+This did not work.
 - [ ] Push arrives on the iPhone (have Claude send a message from an
       emulator account to a channel you're in, or ask Claude to fetch
       your iPhone's token from `push_tokens` for a direct test send)
@@ -105,7 +106,7 @@ wired yet — that's expected; note anything *else* that's broken):
 File anything broken as a note to Claude — iOS-specific bugs batch here
 per §9.1 rather than interrupting the Android loop.
 
-- [ ] Build 5 installed via TestFlight and launches without crashing
+- [X] Build 5 installed via TestFlight and launches without crashing
 - [ ] Checklist run; failures noted
 
 ---

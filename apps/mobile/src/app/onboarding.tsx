@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MINIMUM_AGE_YEARS, SPORTS, type Sport } from '@pickup/shared';
 
 import { SportChips } from '@/components/chips';
+import { DateTimeField } from '@/components/date-time-field';
 import { errorMessage } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -12,10 +13,11 @@ import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
-function parseBirthdate(value: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const d = new Date(`${value}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
+// profiles.birthdate is a DATE column — send the calendar date, not a timestamp
+function toDateString(d: Date): string {
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
 }
 
 function ageInYears(birthdate: Date): number {
@@ -31,21 +33,20 @@ export default function OnboardingScreen() {
   const theme = useTheme();
   const { session, profile, refreshProfile } = useAuth();
   const [name, setName] = useState(profile?.display_name === 'New player' ? '' : (profile?.display_name ?? ''));
-  const [birthdate, setBirthdate] = useState('');
+  const [birthdate, setBirthdate] = useState<Date | null>(null);
   const [sports, setSports] = useState<Sport[]>(['pickleball']);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    const dob = parseBirthdate(birthdate);
     if (!name.trim()) {
       Alert.alert('Add your name', 'Other players see this on events and in chat.');
       return;
     }
-    if (!dob) {
-      Alert.alert('Invalid date', 'Enter your birthdate as YYYY-MM-DD.');
+    if (!birthdate) {
+      Alert.alert('Add your birthdate', 'Select your date of birth.');
       return;
     }
-    if (ageInYears(dob) < MINIMUM_AGE_YEARS) {
+    if (ageInYears(birthdate) < MINIMUM_AGE_YEARS) {
       // 18+ gate (§8) — neutral message, enforced again by the DB constraint
       Alert.alert('Sorry', 'You must be 18 or older to use Pickup.');
       return;
@@ -54,7 +55,7 @@ export default function OnboardingScreen() {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ display_name: name.trim(), birthdate, sports })
+        .update({ display_name: name.trim(), birthdate: toDateString(birthdate), sports })
         .eq('id', session!.user.id);
       if (error) throw error;
       await refreshProfile(); // flips needsOnboarding → router guard swaps stacks
@@ -82,14 +83,12 @@ export default function OnboardingScreen() {
           />
 
           <ThemedText type="smallBold">Birthdate</ThemedText>
-          <TextInput
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={theme.textSecondary}
+          <DateTimeField
+            mode="date"
             value={birthdate}
-            onChangeText={setBirthdate}
-            keyboardType="numbers-and-punctuation"
-            maxLength={10}
-            style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
+            onChange={setBirthdate}
+            placeholder="Select your birthdate"
+            maximumDate={new Date()}
           />
           <ThemedText type="small" themeColor="textSecondary">
             Pickup is 18+. Your birthdate is never shown to other players.

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { Chip } from '@/components/chips';
+import { DateTimeField } from '@/components/date-time-field';
 import { errorMessage , formatDistance, SKILL_LABEL, SPORT_EMOJI, SPORT_LABEL } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -16,17 +17,12 @@ import { createEvent, fetchVenuesNear, type NearbyVenue } from '@/lib/queries';
 
 const AUSTIN: LatLng = { lat: 30.2672, lng: -97.7431 };
 
-const DAY_OPTIONS = [
-  { label: 'Today', offset: 0 },
-  { label: 'Tomorrow', offset: 1 },
-  { label: 'In 2 days', offset: 2 },
-] as const;
-
-const HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6am–9pm
-
-function hourLabel(h: number): string {
-  if (h === 12) return '12 PM';
-  return h < 12 ? `${h} AM` : `${h - 12} PM`;
+// 6 PM today, or tomorrow once that has already passed
+function defaultStart(): Date {
+  const d = new Date();
+  d.setHours(18, 0, 0, 0);
+  if (d.getTime() < Date.now()) d.setDate(d.getDate() + 1);
+  return d;
 }
 
 export default function CreateEventScreen() {
@@ -46,8 +42,7 @@ export default function CreateEventScreen() {
   const [sport, setSport] = useState<Sport>('pickleball');
   const [skillMin, setSkillMin] = useState<SkillLevel | null>(null);
   const [skillMax, setSkillMax] = useState<SkillLevel | null>(null);
-  const [dayOffset, setDayOffset] = useState(0);
-  const [hour, setHour] = useState(18);
+  const [startsAt, setStartsAt] = useState(defaultStart);
   const [playerCap, setPlayerCap] = useState('4');
   const [here, setHere] = useState<LatLng>(AUSTIN);
   const [venues, setVenues] = useState<NearbyVenue[]>([]);
@@ -96,9 +91,6 @@ export default function CreateEventScreen() {
       Alert.alert('Invalid player cap', 'Use a number between 2 and 500, or leave it empty.');
       return;
     }
-    const startsAt = new Date();
-    startsAt.setDate(startsAt.getDate() + dayOffset);
-    startsAt.setHours(hour, 0, 0, 0);
     if (startsAt.getTime() < Date.now()) {
       Alert.alert('Time has passed', 'Pick a start time in the future.');
       return;
@@ -157,27 +149,30 @@ export default function CreateEventScreen() {
 
         <ThemedText type="smallBold">When</ThemedText>
         <View style={styles.row}>
-          {DAY_OPTIONS.map((d) => (
-            <Chip
-              key={d.offset}
-              label={d.label}
-              selected={dayOffset === d.offset}
-              onPress={() => setDayOffset(d.offset)}
-            />
-          ))}
+          <DateTimeField
+            mode="date"
+            value={startsAt}
+            minimumDate={new Date()}
+            onChange={(d) =>
+              setStartsAt((prev) => {
+                const next = new Date(prev);
+                next.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+                return next;
+              })
+            }
+          />
+          <DateTimeField
+            mode="time"
+            value={startsAt}
+            onChange={(d) =>
+              setStartsAt((prev) => {
+                const next = new Date(prev);
+                next.setHours(d.getHours(), d.getMinutes(), 0, 0);
+                return next;
+              })
+            }
+          />
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.row}>
-            {HOURS.map((h) => (
-              <Chip
-                key={h}
-                label={hourLabel(h)}
-                selected={hour === h}
-                onPress={() => setHour(h)}
-              />
-            ))}
-          </View>
-        </ScrollView>
 
         <ThemedText type="smallBold">Where</ThemedText>
         <View style={styles.venueList}>
