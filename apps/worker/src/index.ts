@@ -14,6 +14,7 @@ type PublicEvent = {
   id: string;
   title: string;
   sport: string;
+  sport_other_label: string | null;
   starts_at: string;
   player_cap: number | null;
   going_count: number;
@@ -105,7 +106,8 @@ app.get("/e/:eventId", async (c) => {
     timeZone: "America/Chicago",
   });
   const title = `${event.title} — ${when}`;
-  const desc = `${event.going_count} going${event.player_cap ? ` · ${event.player_cap} max` : ""} · Join the ${event.sport} game on Pickup`;
+  const sportName = event.sport_other_label ?? event.sport;
+  const desc = `${event.going_count} going${event.player_cap ? ` · ${event.player_cap} max` : ""} · Join the ${sportName} game on Pickup`;
 
   return c.html(`<!doctype html>
 <html lang="en">
@@ -130,7 +132,7 @@ app.get("/e/:eventId", async (c) => {
 </style>
 </head>
 <body>
-<p class="muted">Pickup · ${escapeHtml(event.sport)}</p>
+<p class="muted">Pickup · ${escapeHtml(sportName)}</p>
 <h1>${escapeHtml(event.title)}</h1>
 <p>${escapeHtml(when)} · ${escapeHtml(desc)}</p>
 <p><a class="cta" href="pickup://e/${eventId}">Open in the Pickup app</a></p>

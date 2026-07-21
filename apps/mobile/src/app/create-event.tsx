@@ -1,5 +1,5 @@
-import type { LatLng, SkillLevel, Sport } from '@pickup/shared';
-import { SKILL_LEVELS, SPORTS } from '@pickup/shared';
+import type { EventSport, LatLng, SkillLevel } from '@pickup/shared';
+import { EVENT_SPORTS, OTHER_SPORT_SUGGESTIONS, SKILL_LEVELS } from '@pickup/shared';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -39,7 +39,8 @@ export default function CreateEventScreen() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [sport, setSport] = useState<Sport>('pickleball');
+  const [sport, setSport] = useState<EventSport>('pickleball');
+  const [otherLabel, setOtherLabel] = useState('');
   const [skillMin, setSkillMin] = useState<SkillLevel | null>(null);
   const [skillMax, setSkillMax] = useState<SkillLevel | null>(null);
   const [startsAt, setStartsAt] = useState(defaultStart);
@@ -67,6 +68,10 @@ export default function CreateEventScreen() {
         }
       }
       setHere(center);
+      if (sport === 'other') {
+        setVenues([]);
+        return;
+      }
       try {
         setVenues(await fetchVenuesNear(center, { sport }));
       } catch {
@@ -80,6 +85,10 @@ export default function CreateEventScreen() {
   const submit = async () => {
     if (title.trim().length < 3) {
       Alert.alert('Add a title', 'Give your game a short title (at least 3 characters).');
+      return;
+    }
+    if (sport === 'other' && otherLabel.trim().length === 0) {
+      Alert.alert('Name the sport', 'Name the sport when choosing Other.');
       return;
     }
     if (!venue && !usePin) {
@@ -103,6 +112,7 @@ export default function CreateEventScreen() {
         title: title.trim(),
         description: description.trim(),
         sport,
+        sportOtherLabel: sport === 'other' ? otherLabel.trim() : null,
         skillMin,
         skillMax,
         venueId: venue?.id ?? null,
@@ -124,7 +134,7 @@ export default function CreateEventScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <ThemedText type="smallBold">Sport</ThemedText>
         <View style={styles.row}>
-          {SPORTS.map((s) => (
+          {EVENT_SPORTS.map((s) => (
             <Chip
               key={s}
               label={`${SPORT_EMOJI[s]} ${SPORT_LABEL[s]}`}
@@ -132,10 +142,33 @@ export default function CreateEventScreen() {
               onPress={() => {
                 setSport(s);
                 setVenue(null);
+                if (s === 'other') setUsePin(true);
               }}
             />
           ))}
         </View>
+
+        {sport === 'other' && (
+          <>
+            <TextInput
+              placeholder="What sport? e.g. Spikeball"
+              placeholderTextColor={theme.textSecondary}
+              value={otherLabel}
+              onChangeText={setOtherLabel}
+              maxLength={40}
+              style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
+            />
+            <View style={styles.row}>
+              {OTHER_SPORT_SUGGESTIONS.filter(
+                (s) =>
+                  s.toLowerCase().includes(otherLabel.trim().toLowerCase()) &&
+                  s.toLowerCase() !== otherLabel.trim().toLowerCase()
+              ).map((s) => (
+                <Chip key={s} label={s} selected={false} onPress={() => setOtherLabel(s)} />
+              ))}
+            </View>
+          </>
+        )}
 
         <ThemedText type="smallBold">Title</ThemedText>
         <TextInput
@@ -195,7 +228,7 @@ export default function CreateEventScreen() {
               }}
             />
           ))}
-          {venues.length === 0 && (
+          {venues.length === 0 && sport !== 'other' && (
             <ThemedText type="small" themeColor="textSecondary">
               No venues near here yet — drop a pin instead.
             </ThemedText>

@@ -91,7 +91,7 @@ create policy "rsvps: leave own"
 
 -- ---------------------------------------------------------------------------
 -- Check-ins (§6.1 privacy rules): rows readable only by their owner.
--- Everyone else sees aggregates through venue_occupancy() (counts + skill mix);
+-- Everyone else sees aggregates through venue_occupancy() (counts);
 -- name-level visibility for mutuals/attendees arrives with Phase 2 social graph.
 -- ---------------------------------------------------------------------------
 create policy "checkins: own rows"

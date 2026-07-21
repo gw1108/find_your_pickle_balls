@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { skillLevelSchema, sportSchema } from "./sports";
+import { eventSportSchema, skillLevelSchema, sportSchema } from "./sports";
 
 export const uuidSchema = z.string().uuid();
 
@@ -23,9 +23,7 @@ export const profileSchema = z.object({
   avatar_url: z.string().url().nullable(),
   bio: z.string().max(300).nullable(),
   sports: z.array(sportSchema).default([]),
-  skill_levels: z.record(sportSchema, skillLevelSchema).default({}),
   ig_handle: igHandleSchema.nullable(),
-  ghost_mode: z.boolean().default(false),
   created_at: z.string(),
 });
 export type Profile = z.infer<typeof profileSchema>;
@@ -51,7 +49,8 @@ export const eventSchema = z.object({
   venue_id: uuidSchema.nullable(),
   title: z.string().min(3).max(120),
   description: z.string().max(2000).nullable(),
-  sport: sportSchema,
+  sport: eventSportSchema,
+  sport_other_label: z.string().trim().min(1).max(40).nullable(),
   skill_min: skillLevelSchema.nullable(),
   skill_max: skillLevelSchema.nullable(),
   /** Fuzzed pin until RSVP (§8): clients get venue/park centroid pre-RSVP. */
@@ -71,6 +70,7 @@ export const createEventInputSchema = eventSchema
     title: true,
     description: true,
     sport: true,
+    sport_other_label: true,
     skill_min: true,
     skill_max: true,
     venue_id: true,
@@ -81,6 +81,9 @@ export const createEventInputSchema = eventSchema
   })
   .refine((e) => e.venue_id !== null || e.location !== null, {
     message: "Event needs a venue or a dropped pin",
+  })
+  .refine((e) => (e.sport === "other") === (e.sport_other_label != null), {
+    message: "Name the sport when choosing Other",
   });
 export type CreateEventInput = z.infer<typeof createEventInputSchema>;
 
@@ -96,7 +99,7 @@ export const checkinSchema = z.object({
   id: uuidSchema,
   venue_id: uuidSchema,
   user_id: uuidSchema,
-  sport: sportSchema,
+  sport: eventSportSchema,
   expires_at: z.string(),
   created_at: z.string(),
 });
@@ -107,7 +110,7 @@ export type Checkin = z.infer<typeof checkinSchema>;
 export const venueOccupancySchema = z.object({
   venue_id: uuidSchema,
   checkin_count: z.number().int().nonnegative(),
-  by_sport: z.record(sportSchema, z.number().int().nonnegative()),
+  by_sport: z.record(eventSportSchema, z.number().int().nonnegative()),
   expected_from_rsvps: z.number().int().nonnegative(),
 });
 export type VenueOccupancy = z.infer<typeof venueOccupancySchema>;
@@ -127,7 +130,7 @@ export type Report = z.infer<typeof reportSchema>;
 export const eventsNearInputSchema = z.object({
   center: latLngSchema,
   radius_m: z.number().positive().max(100_000),
-  sport: sportSchema.optional(),
+  sport: eventSportSchema.optional(),
   skill: skillLevelSchema.optional(),
   after: z.string().optional(),
 });

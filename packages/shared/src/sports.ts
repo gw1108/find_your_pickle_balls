@@ -6,16 +6,20 @@ export const SPORTS = ["pickleball", "basketball", "running", "tennis"] as const
 export const sportSchema = z.enum(SPORTS);
 export type Sport = z.infer<typeof sportSchema>;
 
-/** Skill buckets rendered as filters. Pickleball uses DUPR-style bands;
- * other sports map onto the same coarse scale. */
+/** Sports valid on events: the profile-eligible four plus the generic bucket.
+ * Profiles and venues stay on `Sport` — "other" is excluded by construction. */
+export const EVENT_SPORTS = [...SPORTS, "other"] as const;
+export const eventSportSchema = z.enum(EVENT_SPORTS);
+export type EventSport = z.infer<typeof eventSportSchema>;
+
+/** Seed suggestions for the "other" sport label; a future aggregate RPC can
+ * replace this behind the same constant. */
+export const OTHER_SPORT_SUGGESTIONS = [
+  "Spikeball", "Volleyball", "Soccer", "Ultimate Frisbee", "Softball",
+  "Badminton", "Table Tennis", "Disc Golf", "Kickball", "Flag Football",
+] as const;
+
+/** Skill buckets rendered as event filters. */
 export const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "expert"] as const;
 export const skillLevelSchema = z.enum(SKILL_LEVELS);
 export type SkillLevel = z.infer<typeof skillLevelSchema>;
-
-/** DUPR-style display bands for pickleball filters (§2). */
-export const PICKLEBALL_SKILL_BANDS: Record<SkillLevel, string> = {
-  beginner: "< 3.0",
-  intermediate: "3.0 – 3.5",
-  advanced: "3.5 – 4.0",
-  expert: "4.0+",
-};

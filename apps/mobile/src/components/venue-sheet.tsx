@@ -1,6 +1,6 @@
 // Venue detail sheet (§6.1): live occupancy aggregates + check in / out.
 // Names are never shown — counts and sport mix only (privacy rules, §6.1).
-import type { LatLng, Sport } from '@pickup/shared';
+import type { EventSport, LatLng, Sport } from '@pickup/shared';
 import { useEffect, useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
 
@@ -97,7 +97,7 @@ export function VenueSheet({ venue, myCheckin, myLocation, onClose, onChanged }:
     }
   };
 
-  const bySport = Object.entries(occupancy?.by_sport ?? {}) as [Sport, number][];
+  const bySport = Object.entries(occupancy?.by_sport ?? {}) as [EventSport, number][];
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Camera, Map, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
-import type { LatLng, SkillLevel, Sport } from '@pickup/shared';
-import { OCCUPANCY_TOPIC, SPORTS } from '@pickup/shared';
+import type { EventSport, LatLng, SkillLevel } from '@pickup/shared';
+import { EVENT_SPORTS, OCCUPANCY_TOPIC } from '@pickup/shared';
 import * as Location from 'expo-location';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -61,11 +61,17 @@ export default function MapScreen() {
   const [myCheckin, setMyCheckin] = useState<MyCheckin | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<NearbyVenue | null>(null);
   const [showList, setShowList] = useState(false);
-  const [sport, setSport] = useState<Sport | null>(null);
+  const [sport, setSport] = useState<EventSport | null>(null);
   const [skill, setSkill] = useState<SkillLevel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(11);
   const [refreshing, setRefreshing] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  // one-time center-on-user, deferred until BOTH the GPS fix and the native
+  // map are ready — an easeTo issued before the camera mounts is silently
+  // dropped, which is exactly what happens on the fast remount after
+  // sign-out → sign-in (permission already granted, location resolves first)
+  const centeredOnUser = useRef(false);
   // venues we already offered a check-in for this session (§6.1 prompt)
   const promptedVenues = useRef<Set<string>>(new Set());
   const promptCooldownUntil = useRef(0);
@@ -97,13 +103,22 @@ export default function MapScreen() {
         const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setMyLocation(here);
         setCenter(here);
-        cameraRef.current?.easeTo({ center: [here.lng, here.lat], zoom: 12, duration: 600 });
       } catch {
         // location unavailable (services off, request interrupted) — stay on
         // the launch-metro fallback
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!mapLoaded || !myLocation || centeredOnUser.current) return;
+    centeredOnUser.current = true;
+    cameraRef.current?.easeTo({
+      center: [myLocation.lng, myLocation.lat],
+      zoom: 12,
+      duration: 600,
+    });
+  }, [mapLoaded, myLocation]);
 
   const load = useCallback(async () => {
     try {
@@ -113,7 +128,10 @@ export default function MapScreen() {
           sport: sport ?? undefined,
           skill: skill ?? undefined,
         }),
-        fetchVenuesNear(center, { sport: sport ?? undefined }),
+        fetchVenuesNear(center, {
+          // venues never match 'other' — leave the pins unfiltered instead
+          sport: sport === 'other' ? undefined : (sport ?? undefined),
+        }),
         fetchMyCheckin(userId),
       ]);
       setEvents(nextEvents);
@@ -229,6 +247,7 @@ export default function MapScreen() {
           style={styles.map}
           mapStyle={MAP_STYLE_URL}
           attributionPosition={{ bottom: 8, left: 8 }}
+          onDidFinishLoadingMap={() => setMapLoaded(true)}
           onRegionDidChange={(e) => {
             const { userInteraction, center: c, zoom: z } = e.nativeEvent;
             setZoom(z);
@@ -288,7 +307,7 @@ export default function MapScreen() {
         <FlatList
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={SPORTS}
+          data={EVENT_SPORTS}
           keyExtractor={(s) => s}
           contentContainerStyle={styles.filterRow}
           renderItem={({ item }) => (

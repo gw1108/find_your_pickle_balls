@@ -39,7 +39,7 @@ Nomad Table ("nomadtable: travel friends", solo founder Jay Raavi, launched Nov 
 ### Core loop to copy
 1. **Home = map of activities** (list-view toggle). Cards: emoji, title, host name/photo, time, attendee count, stacked avatars ("+12 going").
 2. **One-tap "I'm interested"** — no host approval — instantly joins the event **group chat** and reveals who's going. Open-app → in-the-chat in under 10 seconds.
-3. Profiles are light: name, age, sports, skill level, photos, IG handle.
+3. Profiles are light: name, age, sports, photos, IG handle.
 
 ### Sports-specific adaptations (our differentiators vs. their "women-only filter" insight)
 - **Skill-level filters** (pickleball DUPR-style 3.0/3.5/4.0+) — table stakes, must exist.
@@ -198,7 +198,7 @@ Every competitor answers "where can I play?" (Pickleheads' directory) or "when i
 - **It deepens the north-star metric.** Median time-to-first-join drops when users can join *courts*, not just events — "3 players at Mueller now" is a sub-10-second join with no host required.
 - **It's nearly free on the chosen stack**: `checkins` table + PostGIS geofence check + Supabase Realtime (already streaming pin/RSVP updates) + one RLS policy + a pg_cron TTL sweep. No new vendors, no new infra line item. Est. 2–3 weeks (§12 Phase 2).
 
-**Privacy rules (non-negotiable — this feature is a stalking vector if done carelessly):** opt-in only; presence always snapped to the venue centroid, never raw coordinates; auto-expiring; counts + skill mix shown by default, individual names visible only to mutuals or fellow attendees; blocked users mutually invisible via the same RLS pattern as events; per-user "ghost mode" toggle; check-in history never public. Precise location is CCPA-sensitive (§8) — these rules apply doubly here.
+**Privacy rules (non-negotiable — this feature is a stalking vector if done carelessly):** opt-in only; presence always snapped to the venue centroid, never raw coordinates; auto-expiring; counts + skill mix shown by default, individual names visible only to mutuals or fellow attendees; blocked users mutually invisible via the same RLS pattern as events; check-in history never public. Precise location is CCPA-sensitive (§8) — these rules apply doubly here.
 
 **Fast-follow (not MVP):** a lightweight **digital paddle-stack queue** for busy open-play courts — the physical paddle rack, in-app, attached to a venue's live state. Beloved, unsolved pain at packed pickleball venues, but it needs density at a specific court to matter; build it once occupancy proves out at the flagship courts.
 
@@ -229,7 +229,7 @@ Deep links: self-host AASA + assetlinks.json (exactly like Nomad Table), Smart A
 
 **Liability posture — platform, not organizer:** ToS with assumption-of-risk, waiver/release, "we do not screen users or organize/supervise events," limitation of liability, arbitration (Meetup/Skillshare templates). **Never charge for or host events at launch** (that moves us into sports-organizer insurance territory, ~$6.60–11/player/yr). LLC + ~$1M general liability (~$500/yr); defer E&O/cyber.
 
-**Location privacy:** precise geolocation is CCPA "sensitive personal information" (CA AG ran a 2025 sweep). Fuzz event pins (snap to venue/park centroid) until RSVP; reveal exact court post-RSVP; never collect/display home locations; accurate Apple nutrition labels (Precise Location, linked, App Functionality only); never sell/share location. **Live check-ins (§6.1) get the strictest treatment:** opt-in, venue-snapped, auto-expiring, names gated to mutuals/attendees, ghost-mode toggle, block = mutual presence invisibility, no public check-in history.
+**Location privacy:** precise geolocation is CCPA "sensitive personal information" (CA AG ran a 2025 sweep). Fuzz event pins (snap to venue/park centroid) until RSVP; reveal exact court post-RSVP; never collect/display home locations; accurate Apple nutrition labels (Precise Location, linked, App Functionality only); never sell/share location. **Live check-ins (§6.1) get the strictest treatment:** opt-in, venue-snapped, auto-expiring, names gated to mutuals/attendees, block = mutual presence invisibility, no public check-in history.
 
 **Region:** US-only at launch on both stores → defers EU DSA trader publication (Apple has removed non-compliant apps since Feb 2025) and GDPR work.
 
@@ -306,8 +306,8 @@ the Android rig against the live Supabase project: sign-up → 18+ onboarding �
 map (MapLibre v11 + Stadia tiles, event pins with going-counts, list toggle,
 sport/skill filters) → create-event (venue picker over the imported Austin
 layer, 1,210 OSM venues) → auto host-RSVP + channel creation → group-chat
-send/persist/render + inbox with unread counts → profile edit (skills,
-optional IG handle, ghost mode). Notable decisions made during the build:
+send/persist/render + inbox with unread counts → profile edit (optional
+IG handle). Notable decisions made during the build:
 chat thread is a custom FlashList-style FlatList (gifted-chat never needed);
 `react-native-keyboard-controller` handles the SDK 57 edge-to-edge keyboard;
 pnpm runs `nodeLinker: hoisted` (Windows CMake builds); migration
@@ -345,8 +345,8 @@ the monorepo. What shipped:
   RPC with block check, inbox/thread render partner names) — start a DM from
   any attendee row (tap → Message/Report/Block sheet).
 - **Live court occupancy (§6.1)**: `check_in` RPC (server-enforced 150m
-  geofence, 2h TTL upsert), `venues_near` now returns ghost-mode-respecting
-  `live_count`, venue pins glow green with the count, venue sheet shows
+  geofence, 2h TTL upsert), `venues_near` now returns `live_count`,
+  venue pins glow green with the count, venue sheet shows
   aggregate occupancy + expected-from-RSVPs, geofenced one-tap check-in
   prompt at ~75m, a checked-in banner, and live pin refresh via a
   `realtime.send` trigger on the shared private `occupancy` topic.
@@ -618,6 +618,12 @@ exercised by the same path. Two findings:
   Expo ticket) is invisible to the new ticket-level pruning — tickets came
   back `ok` for a token the receipts endpoint then reported dead. Known
   §4.4-style upgrade, just now observed in the wild.
+
+2026-07-21: profile per-sport skill levels and ghost mode removed end-to-end
+(tag-a05d4c) — `profiles.skill_levels`/`ghost_mode` columns dropped, RPC
+ghost filtering removed from `venue_occupancy`/`venues_near`, profile-screen
+skill picker + Ghost mode row deleted. Event skill ranges are untouched.
+Earlier feature descriptions above predate this removal.
 
 **Definition of done for MVP:** a stranger in the launch metro can open the app, see which courts are live right now, and be in a pickleball game's group chat within 10 seconds, safely (block/report/18+), with invite links that unfurl properly — for ~$25–70/mo in infra.
 

@@ -136,7 +136,7 @@ export default function EventScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen options={{ title: SPORT_LABEL[event.sport] }} />
+      <Stack.Screen options={{ title: event.sport_other_label ?? SPORT_LABEL[event.sport] }} />
       <ScrollView contentContainerStyle={styles.content}>
         <ThemedText style={styles.emoji}>{SPORT_EMOJI[event.sport]}</ThemedText>
         <ThemedText type="subtitle">{event.title}</ThemedText>

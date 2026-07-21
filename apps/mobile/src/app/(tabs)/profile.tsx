@@ -1,11 +1,11 @@
-import { SKILL_LEVELS, SPORTS, igHandleSchema, type SkillLevel, type Sport } from '@pickup/shared';
+import { SPORTS, igHandleSchema, type Sport } from '@pickup/shared';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Chip, SportChips } from '@/components/chips';
-import { errorMessage , SKILL_LABEL, SPORT_LABEL } from '@/lib/format';
+import { SportChips } from '@/components/chips';
+import { errorMessage } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -27,8 +27,6 @@ export default function ProfileScreen() {
   const [bio, setBio] = useState('');
   const [igHandle, setIgHandle] = useState('');
   const [sports, setSports] = useState<Sport[]>([]);
-  const [skills, setSkills] = useState<Partial<Record<Sport, SkillLevel>>>({});
-  const [ghostMode, setGhostMode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [seededFor, setSeededFor] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<BlockedUser[]>([]);
@@ -52,8 +50,6 @@ export default function ProfileScreen() {
     setBio(profile.bio ?? '');
     setIgHandle(profile.ig_handle ?? '');
     setSports(profile.sports);
-    setSkills(profile.skill_levels ?? {});
-    setGhostMode(profile.ghost_mode);
   }
 
   const save = async () => {
@@ -76,8 +72,6 @@ export default function ProfileScreen() {
           bio: bio.trim() || null,
           ig_handle: ig,
           sports,
-          skill_levels: skills,
-          ghost_mode: ghostMode,
         })
         .eq('id', session!.user.id);
       if (error) throw error;
@@ -128,29 +122,6 @@ export default function ProfileScreen() {
             }
           />
 
-          {sports.map((sport) => (
-            <View key={sport} style={styles.skillBlock}>
-              <ThemedText type="small" themeColor="textSecondary">
-                {SPORT_LABEL[sport]} skill
-              </ThemedText>
-              <View style={styles.skillRow}>
-                {SKILL_LEVELS.map((lvl) => (
-                  <Chip
-                    key={lvl}
-                    label={SKILL_LABEL[lvl]}
-                    selected={skills[sport] === lvl}
-                    onPress={() =>
-                      setSkills((cur) => ({
-                        ...cur,
-                        [sport]: cur[sport] === lvl ? undefined : lvl,
-                      }))
-                    }
-                  />
-                ))}
-              </View>
-            </View>
-          ))}
-
           <ThemedText type="smallBold">Instagram (optional)</ThemedText>
           <TextInput
             value={igHandle}
@@ -163,16 +134,6 @@ export default function ProfileScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             Adds a “View on Instagram” link to your profile. Never required.
           </ThemedText>
-
-          <View style={styles.switchRow}>
-            <View style={styles.switchLabel}>
-              <ThemedText type="smallBold">Ghost mode</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                Hide you from live court check-in counts.
-              </ThemedText>
-            </View>
-            <Switch value={ghostMode} onValueChange={setGhostMode} />
-          </View>
 
           <Pressable
             accessibilityRole="button"
@@ -266,15 +227,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   multiline: { minHeight: 80, textAlignVertical: 'top' },
-  skillBlock: { gap: Spacing.two },
-  skillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  switchLabel: { flex: 1, gap: Spacing.half },
   button: {
     alignItems: 'center',
     paddingVertical: Spacing.three,

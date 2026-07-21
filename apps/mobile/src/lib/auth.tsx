@@ -1,5 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
-import type { Sport, SkillLevel } from "@pickup/shared";
+import type { Sport } from "@pickup/shared";
 import {
   createContext,
   useCallback,
@@ -18,9 +18,7 @@ export type MyProfile = {
   avatar_url: string | null;
   bio: string | null;
   sports: Sport[];
-  skill_levels: Partial<Record<Sport, SkillLevel>>;
   ig_handle: string | null;
-  ghost_mode: boolean;
   birthdate: string;
 };
 
@@ -48,9 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from("profiles")
-      .select(
-        "id, display_name, avatar_url, bio, sports, skill_levels, ig_handle, ghost_mode, birthdate"
-      )
+      .select("id, display_name, avatar_url, bio, sports, ig_handle, birthdate")
       .eq("id", userId)
       .maybeSingle();
     if (!error) setProfile((data as MyProfile) ?? null);

@@ -1,17 +1,19 @@
-import type { SkillLevel, Sport } from "@pickup/shared";
+import type { EventSport, SkillLevel } from "@pickup/shared";
 
-export const SPORT_EMOJI: Record<Sport, string> = {
+export const SPORT_EMOJI: Record<EventSport, string> = {
   pickleball: "🥒",
   basketball: "🏀",
   running: "🏃",
   tennis: "🎾",
+  other: "🏆",
 };
 
-export const SPORT_LABEL: Record<Sport, string> = {
+export const SPORT_LABEL: Record<EventSport, string> = {
   pickleball: "Pickleball",
   basketball: "Basketball",
   running: "Running",
   tennis: "Tennis",
+  other: "Other",
 };
 
 export const SKILL_LABEL: Record<SkillLevel, string> = {

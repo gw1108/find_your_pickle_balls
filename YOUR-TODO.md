@@ -2,7 +2,7 @@
 
 **What this file is:** the owner's punch-list — the queue of steps only a
 human can do (interactive logins like `wrangler login`/`eas-cli`, dashboard
-clicks, payments, live `db push`, physical-device tests). Agents hit one of
+clicks, payments, physical-device tests). Agents hit one of
 these, write the step here spelled out click-by-click, and continue with
 whatever isn't blocked; the owner works the list top-to-bottom and then
 prompts the next phase. Anything *not* listed here, Claude can do from the
@@ -28,6 +28,20 @@ Everything through Phase 3's website deploys (migrations, venue layer,
 push notifications, Edge Functions, the `pickup-worker` + the live
 marketing site) is done and has been deleted per the rules above — see
 the PLAN.md §12 status blocks for the history.
+
+---
+
+## 0h. Deploy pickup-worker for the "Other" sport share cards
+
+The DB migrations for the "Other" sport option are already pushed and
+verified live (2026-07-20); `event_public` now returns `sport_other_label`.
+The worker change that uses it (`apps/worker/src/index.ts` — share cards say
+"Join the Spikeball game" instead of "Join the other game") is committed but
+prod deploys are owner-gated. Verified working via local `wrangler dev`.
+
+1. `cd apps/worker && pnpm exec wrangler deploy`
+
+- [ ] Deployed; opening `https://pickup-worker.pickupsports.workers.dev/e/<any-active-event-id>` still renders (first-class sports unchanged; an "other" event shows its label)
 
 ---
 
@@ -82,12 +96,6 @@ worked fine; it's the final Supabase → app hop that's misconfigured.)
 Sign in with the dev email/password account (Sign in with Apple isn't
 wired yet — that's expected; note anything *else* that's broken):
 
-- [X] **Continue with Google** works — first attempt 2026-07-15 dead-ended
-      on `localhost` in Safari; fix is 0d-5 above (redirect allowlist),
-      then retest.
-- [X] Map renders with venue + event pins; pan/zoom/rotate gestures feel right
-- [X] Sport/skill filters and the list toggle work
-- [ ] One-tap join an event → lands in the group chat; send a message
 - [ ] Chat cold-open: force-quit the app, reopen straight into a thread
 This did not work.
 - [ ] Push arrives on the iPhone (have Claude send a message from an
@@ -106,7 +114,6 @@ This did not work.
 File anything broken as a note to Claude — iOS-specific bugs batch here
 per §9.1 rather than interrupting the Android loop.
 
-- [X] Build 5 installed via TestFlight and launches without crashing
 - [ ] Checklist run; failures noted
 
 ---

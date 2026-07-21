@@ -1,6 +1,7 @@
 import type {
   ChannelInfo,
   ChannelListItem,
+  EventSport,
   LatLng,
   Message,
   SkillLevel,
@@ -16,7 +17,8 @@ export type NearbyEvent = {
   host_id: string;
   venue_id: string | null;
   title: string;
-  sport: Sport;
+  sport: EventSport;
+  sport_other_label: string | null;
   skill_min: SkillLevel | null;
   skill_max: SkillLevel | null;
   lat: number;
@@ -38,13 +40,13 @@ export type NearbyVenue = {
   court_count: number | null;
   verified: boolean;
   distance_m: number;
-  /** Live check-in count (§6.1) — ghost-mode users excluded server-side. */
+  /** Live check-in count (§6.1). */
   live_count: number;
 };
 
 export async function fetchEventsNear(
   center: LatLng,
-  opts: { radiusM?: number; sport?: Sport; skill?: SkillLevel } = {}
+  opts: { radiusM?: number; sport?: EventSport; skill?: SkillLevel } = {}
 ): Promise<NearbyEvent[]> {
   const { data, error } = await supabase.rpc("events_near", {
     p_lat: center.lat,
@@ -77,7 +79,8 @@ export type EventDetail = {
   venue_id: string | null;
   title: string;
   description: string | null;
-  sport: Sport;
+  sport: EventSport;
+  sport_other_label: string | null;
   skill_min: SkillLevel | null;
   skill_max: SkillLevel | null;
   starts_at: string;
@@ -97,7 +100,7 @@ export async function fetchEventDetail(eventId: string): Promise<EventDetail | n
   const { data, error } = await supabase
     .from("events")
     .select(
-      `id, host_id, venue_id, title, description, sport, skill_min, skill_max,
+      `id, host_id, venue_id, title, description, sport, sport_other_label, skill_min, skill_max,
        starts_at, ends_at, player_cap, status,
        host:profiles!events_host_id_fkey (id, display_name, avatar_url),
        venue:venues (id, name, address),
@@ -145,7 +148,8 @@ export type CreateEventArgs = {
   hostId: string;
   title: string;
   description?: string;
-  sport: Sport;
+  sport: EventSport;
+  sportOtherLabel: string | null;
   skillMin: SkillLevel | null;
   skillMax: SkillLevel | null;
   venueId: string | null;
@@ -162,6 +166,7 @@ export async function createEvent(args: CreateEventArgs): Promise<string> {
       title: args.title,
       description: args.description || null,
       sport: args.sport,
+      sport_other_label: args.sportOtherLabel,
       skill_min: args.skillMin,
       skill_max: args.skillMax,
       venue_id: args.venueId,
@@ -306,7 +311,7 @@ export async function checkOut(userId: string): Promise<void> {
 export type VenueOccupancy = {
   venue_id: string;
   checkin_count: number;
-  by_sport: Partial<Record<Sport, number>>;
+  by_sport: Partial<Record<EventSport, number>>;
   expected_from_rsvps: number;
 };
 
