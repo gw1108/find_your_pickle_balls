@@ -30,3 +30,9 @@ supabase/.branches/
 Thumbs.db
 *.log
 *.tmp
+
+# claude pipeline (hack/pipeline.py) runtime artifacts
+__pycache__/
+*.pyc
+.pipeline_done_*
+.pipeline_state_*.json
