@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "app.pickupsports.mobile",
+      "usesAppleSignIn": true,
       "associatedDomains": [
         "applinks:pickupsports.app"
       ],
@@ -53,6 +54,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "expo-apple-authentication",
       "expo-router",
       "expo-notifications",
       "@maplibre/maplibre-react-native",

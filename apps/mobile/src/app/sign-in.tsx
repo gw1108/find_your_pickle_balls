@@ -1,13 +1,15 @@
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { errorMessage } from '@/lib/format';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 
@@ -35,6 +37,7 @@ async function createSessionFromUrl(url: string) {
 
 export default function SignInScreen() {
   const theme = useTheme();
+  const colorScheme = useColorScheme();
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,6 +53,44 @@ export default function SignInScreen() {
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type === 'success') await createSessionFromUrl(result.url);
     } catch (e) {
+      Alert.alert('Sign-in failed', errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signInWithApple = async () => {
+    setBusy(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) throw new Error('Apple returned no identity token');
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+      if (error) throw error;
+      // Apple provides the name only on the very first authorization, and only
+      // on-device — persist it now or lose it. The eq('display_name', ...)
+      // guard limits the update to the handle_new_user stub row; errors are
+      // ignored so a profile hiccup can't fail an otherwise good sign-in.
+      const name = [credential.fullName?.givenName, credential.fullName?.familyName]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      if (name && data.user) {
+        await supabase
+          .from('profiles')
+          .update({ display_name: name })
+          .eq('id', data.user.id)
+          .eq('display_name', 'New player');
+      }
+    } catch (e) {
+      if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') return;
       Alert.alert('Sign-in failed', errorMessage(e));
     } finally {
       setBusy(false);
@@ -93,6 +134,20 @@ export default function SignInScreen() {
           style={[styles.button, { backgroundColor: theme.text }]}>
           <ThemedText style={{ color: theme.background }}>Continue with Google</ThemedText>
         </Pressable>
+
+        {Platform.OS === 'ios' && (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+            buttonStyle={
+              colorScheme === 'dark'
+                ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+            }
+            cornerRadius={Spacing.three}
+            style={styles.appleButton}
+            onPress={busy ? () => {} : signInWithApple}
+          />
+        )}
 
         {__DEV__ && (
           <ThemedView type="backgroundElement" style={styles.devBox}>
@@ -140,6 +195,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     borderRadius: Spacing.three,
   },
+  // Native Apple button needs an explicit height; 48 matches the Google
+  // button's paddingVertical footprint.
+  appleButton: { height: 48 },
   devBox: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.two },
   devRow: { flexDirection: 'row', gap: Spacing.four },
   input: {

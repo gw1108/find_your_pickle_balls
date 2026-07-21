@@ -77,6 +77,41 @@ worked fine; it's the final Supabase → app hop that's misconfigured.)
 - [ ] Site URL + redirect allowlist updated
 - [ ] Google sign-in lands back in the app
 
+### 0d-6. Wire up Sign in with Apple (portal + dashboard, ~5 min)
+
+The native code is committed; these two server-side configs make it work.
+No Services ID or secret key is needed — the native `signInWithIdToken`
+flow authenticates with the app's bundle ID directly.
+
+1. **Apple Developer portal — enable the capability on the App ID:**
+   https://developer.apple.com/account/resources/identifiers/list
+   → click `app.pickupsports.mobile` → check **Sign In with Apple** →
+   **Save** (leave "Enable as a primary App ID"). EAS-managed credentials
+   regenerate the provisioning profile automatically on the next build;
+   if a build fails on a stale profile, run `npx eas-cli credentials` →
+   iOS → regenerate the profile.
+2. **Supabase dashboard — enable the Apple provider:**
+   https://supabase.com/dashboard/project/myqkjecfuqqjiknzqtbi/auth/providers
+   → **Apple** → toggle **Enable Sign in with Apple** → under
+   **Client IDs** enter `app.pickupsports.mobile` → **Save**. Leave
+   **Secret Key** empty (only the web OAuth flow needs it).
+3. **Rebuild + install** — the entitlement requires a new binary; the
+   TestFlight build on your phone does NOT have it:
+   `cd apps/mobile` then
+   `npx eas-cli build --profile ios-milestone --platform ios`,
+   install on the iPhone.
+4. On the iPhone: tap **Sign in with Apple** → Face ID sheet → you should
+   land in onboarding with your first/last name prefilled. Apple only
+   sends the name on the *first* authorization — to re-test that part,
+   revoke at Settings → Apple ID → Sign-In & Security → Sign in with
+   Apple → Pickup → **Stop using**, and delete the test account in-app
+   (Profile → Delete account) first.
+
+- [ ] App ID capability enabled
+- [ ] Supabase Apple provider enabled with bundle ID as client ID
+- [ ] New ios-milestone build installed
+- [ ] Apple sign-in lands in onboarding with name prefilled
+
 ### 0d-3. Install on your iPhone
 
 1. On the iPhone: install **TestFlight** from the App Store, sign in
